@@ -1,0 +1,242 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-alice text-jet font-sans;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  html.dark body {
+    @apply bg-jet-950 text-jet-100;
+  }
+
+  * {
+    @apply selection:bg-forest/20 selection:text-jet;
+  }
+
+  html.dark * {
+    @apply selection:bg-forest/30 selection:text-forest-100;
+  }
+}
+
+@layer components {
+  .timer-ring {
+    transition: stroke-dashoffset 1s linear;
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      #ebeff4 25%,
+      #f4f6f9 50%,
+      #ebeff4 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  .dark .skeleton {
+    background: linear-gradient(
+      90deg,
+      #383b3b 25%,
+      #494e4e 50%,
+      #383b3b 75%
+    );
+    background-size: 200% 100%;
+  }
+
+  .btn-ripple {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-ripple::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      circle at var(--ripple-x, 50%) var(--ripple-y, 50%),
+      rgba(255, 255, 255, 0.3) 0%,
+      transparent 60%
+    );
+    opacity: 0;
+    transform: scale(0);
+    transition: opacity 0.4s, transform 0.4s;
+    pointer-events: none;
+    border-radius: inherit;
+  }
+
+  .btn-ripple:active::after {
+    opacity: 1;
+    transform: scale(2.5);
+    transition: opacity 0s, transform 0s;
+  }
+
+  .ring-glow {
+    filter: drop-shadow(0 0 8px var(--glow-color, rgba(46, 111, 64, 0.3)));
+    transition: filter 0.4s ease-out;
+  }
+
+  .ring-glow-off {
+    filter: drop-shadow(0 0 0 transparent);
+    transition: filter 0.4s ease-out;
+  }
+
+  .timer-ambient-orb {
+    position: absolute;
+    width: 320px;
+    height: 320px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(46, 111, 64, 0.12) 0%, rgba(184, 197, 214, 0.08) 50%, transparent 70%);
+    filter: blur(40px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .confetti-particle {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    animation: confettiBurst 0.8s cubic-bezier(0.16,1,0.3,1) both;
+  }
+
+  .break-ambient-orb {
+    position: absolute;
+    width: 320px;
+    height: 320px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(184, 197, 214, 0.15) 0%, rgba(163, 155, 168, 0.08) 50%, transparent 70%);
+    filter: blur(40px);
+    pointer-events: none;
+    z-index: 0;
+  }
+}
+
+html.dark .timer-ambient-orb {
+  background: radial-gradient(circle, rgba(46, 111, 64, 0.08) 0%, rgba(47, 53, 63, 0.06) 50%, transparent 70%);
+}
+
+html.dark .break-ambient-orb {
+  background: radial-gradient(circle, rgba(184, 197, 214, 0.08) 0%, rgba(163, 155, 168, 0.05) 50%, transparent 70%);
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .gpu {
+    will-change: transform;
+    transform: translateZ(0);
+  }
+}
+
+/* ══════════════════════════════════════════════
+   Dark mode overrides — OUTSIDE @layer so they
+   beat Tailwind utilities when html.dark is set
+   ══════════════════════════════════════════════ */
+
+/* ── Text colors ── */
+html.dark .text-jet { color: #e5e7e7; }
+html.dark .text-jet-600 { color: #aab0b0; }
+html.dark .text-jet-700 { color: #cdd1d1; }
+html.dark .text-lilac-600 { color: #c8c3cb; }
+html.dark .text-lilac-500 { color: #928893; }
+html.dark .text-lilac-400 { color: #A39BA8; }
+html.dark .text-lilac { color: #c8c3cb; }
+
+/* ── Backgrounds ── */
+html.dark .bg-alice { background-color: #1a1e1e; }
+html.dark .bg-white { background-color: #272D2D; }
+html.dark .bg-white\/90 { background-color: rgba(39, 45, 45, 0.9); }
+html.dark .bg-jet-50 { background-color: #383b3b; }
+html.dark .bg-jet\/5 { background-color: rgba(245, 246, 246, 0.05); }
+html.dark .bg-powder-50 { background-color: #2f353f; }
+html.dark .bg-powder-100 { background-color: #383b3b; }
+html.dark .bg-powder-200 { background-color: #494e4e; }
+html.dark .bg-powder-300 { background-color: #565c5c; }
+html.dark .bg-forest-50 { background-color: #1d3c26; }
+html.dark .bg-forest-50\/50 { background-color: rgba(29, 60, 38, 0.5); }
+html.dark .bg-powder-50\/50 { background-color: rgba(47, 53, 63, 0.5); }
+html.dark .bg-powder-200\/30 { background-color: rgba(73, 78, 78, 0.3); }
+
+/* ── Borders ── */
+html.dark .border-powder-100 { border-color: #383b3b; }
+html.dark .border-powder-200 { border-color: #494e4e; }
+html.dark .border-powder-200\/60 { border-color: rgba(73, 78, 78, 0.6); }
+html.dark .border-powder-300 { border-color: #565c5c; }
+html.dark .border-powder { border-color: #565c5c; }
+html.dark .border-jet-100 { border-color: #494e4e; }
+html.dark .border-forest-100 { border-color: #275c36; }
+html.dark .border-forest-100\/60 { border-color: rgba(39, 92, 54, 0.6); }
+
+/* ── Hover states ── */
+html.dark .hover\:bg-powder-50:hover { background-color: #383b3b; }
+html.dark .hover\:bg-powder-100:hover { background-color: #494e4e; }
+html.dark .hover\:bg-jet-50:hover { background-color: #383b3b; }
+html.dark .hover\:border-powder-300:hover { border-color: #656d6d; }
+html.dark .hover\:text-jet:hover { color: #e5e7e7; }
+html.dark .hover\:text-lilac-600:hover { color: #cdd1d1; }
+
+/* ── Active states ── */
+html.dark .active\:bg-powder-100:active { background-color: #494e4e; }
+html.dark .active\:bg-jet-100:active { background-color: #494e4e; }
+
+/* ── Gradients ── */
+html.dark .from-alice { --tw-gradient-from: #1a1e1e; }
+html.dark .via-white { --tw-gradient-via: #272D2D; }
+html.dark .to-alice { --tw-gradient-to: #1a1e1e; }
+html.dark .from-powder-200 { --tw-gradient-from: #383b3b; }
+
+/* ── Form inputs ── */
+html.dark input[type="range"] {
+  background-color: #494e4e;
+}
+html.dark input[type="date"],
+html.dark input[type="text"],
+html.dark input[type="email"],
+html.dark input[type="password"] {
+  background-color: #272D2D;
+  border-color: #494e4e;
+  color: #e5e7e7;
+}
+html.dark input[type="date"]:focus,
+html.dark input[type="text"]:focus,
+html.dark input[type="email"]:focus,
+html.dark input[type="password"]:focus {
+  border-color: #2E6F40;
+}
+html.dark input::placeholder {
+  color: #656d6d;
+}
+
+@keyframes shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
