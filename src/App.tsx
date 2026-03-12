@@ -50,11 +50,13 @@ function AppRoutes() {
 
   if (profile?.has_onboarded === false) {
     return (
-      <Suspense fallback={<PageFallback />}>
-        <Routes>
-          <Route path="*" element={<OnboardingPage />} />
-        </Routes>
-      </Suspense>
+      <SettingsProvider>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            <Route path="*" element={<OnboardingPage />} />
+          </Routes>
+        </Suspense>
+      </SettingsProvider>
     );
   }
 
