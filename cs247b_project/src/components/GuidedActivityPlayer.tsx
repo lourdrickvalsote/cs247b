@@ -1,60 +1,44 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import ProgressRing from './ui/ProgressRing';
 import Button from './ui/Button';
 import IconButton from './ui/IconButton';
-import { useSession } from '../contexts/SessionContext';
+import { useSession, useSessionTimer } from '../contexts/SessionContext';
 import { formatTime, getCategoryStyles } from '../lib/format';
 import { getActivityIcon } from '../lib/icons';
 
 export default function GuidedActivityPlayer() {
-  const { currentActivity, timerRemaining, endBreakEarly, cancelActivity } = useSession();
+  const { currentActivity, endBreakEarly, cancelActivity } = useSession();
+  const { timerRemaining } = useSessionTimer();
   const [stepIndex, setStepIndex] = useState(0);
-  const [stepTimeLeft, setStepTimeLeft] = useState(0);
   const [stepKey, setStepKey] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stepEndTimeRef = useRef<number>(0);
 
   const steps = currentActivity?.instructions ?? [];
   const currentStep = steps[stepIndex];
   const totalSteps = steps.length;
   const isBreathing = currentActivity?.category === 'breathing';
 
-  const clearStepTimer = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  }, []);
-
-  const startStepTimer = useCallback(
-    (duration: number) => {
-      clearStepTimer();
-      setStepTimeLeft(duration);
-
-      const endTime = Date.now() + duration * 1000;
-      intervalRef.current = setInterval(() => {
-        const left = Math.max(0, Math.round((endTime - Date.now()) / 1000));
-        setStepTimeLeft(left);
-
-        if (left <= 0) {
-          clearStepTimer();
-          setStepIndex((prev) => {
-            if (prev < totalSteps - 1) return prev + 1;
-            return prev;
-          });
-        }
-      }, 250);
-    },
-    [clearStepTimer, totalSteps],
-  );
-
+  // Set step end time when stepIndex or currentStep changes
   useEffect(() => {
     if (currentStep) {
-      startStepTimer(currentStep.duration_seconds);
+      stepEndTimeRef.current = Date.now() + currentStep.duration_seconds * 1000;
       setStepKey((k) => k + 1);
     }
-    return clearStepTimer;
-  }, [stepIndex, currentStep, startStepTimer, clearStepTimer]);
+  }, [stepIndex, currentStep]);
+
+  // Derive stepTimeLeft from wall clock — no separate interval needed
+  // This re-computes every time timerRemaining changes (every 1s)
+  const stepTimeLeft = currentStep
+    ? Math.max(0, Math.round((stepEndTimeRef.current - Date.now()) / 1000))
+    : 0;
+
+  // Auto-advance to next step when time runs out
+  useEffect(() => {
+    if (stepTimeLeft <= 0 && currentStep && stepIndex < totalSteps - 1) {
+      setStepIndex((prev) => prev + 1);
+    }
+  }, [stepTimeLeft, currentStep, stepIndex, totalSteps]);
 
   const goNext = () => {
     if (stepIndex < totalSteps - 1) setStepIndex((i) => i + 1);

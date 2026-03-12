@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SessionHistoryProvider } from './contexts/SessionHistoryContext';
 import { SessionProvider } from './contexts/SessionContext';
+import { SettingsProvider } from './contexts/SettingsContext';
+import { ActivitiesProvider } from './contexts/ActivitiesContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider } from './components/ui/Toast';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -56,6 +58,8 @@ function AppRoutes() {
   }
 
   return (
+    <SettingsProvider>
+    <ActivitiesProvider>
     <SessionHistoryProvider>
       <SessionProvider>
         <Suspense fallback={<PageFallback />}>
@@ -71,6 +75,8 @@ function AppRoutes() {
         </Suspense>
       </SessionProvider>
     </SessionHistoryProvider>
+    </ActivitiesProvider>
+    </SettingsProvider>
   );
 }
 

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { Profile } from '../types/database';
@@ -46,7 +46,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      // Skip the initial SIGNED_IN event — getSession handles that
       if (initialLoad) return;
 
       const currentUser = session?.user ?? null;
@@ -61,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, displayName: string) => {
+  const signUp = useCallback(async (email: string, password: string, displayName: string) => {
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) return { error: error.message };
 
@@ -76,26 +75,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     return { error: null };
-  };
+  }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
     return { error: null };
-  };
+  }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-  };
+  }, []);
 
-  const completeOnboarding = async () => {
+  const completeOnboarding = useCallback(async () => {
     if (!user) return;
     localStorage.setItem(`brevi_onboarded_${user.id}`, 'true');
     setProfile((prev) => prev ? { ...prev, has_onboarded: true } : prev);
-  };
+  }, [user]);
+
+  const value = useMemo<AuthContextType>(() => ({
+    user, profile, loading, signUp, signIn, signOut, completeOnboarding,
+  }), [user, profile, loading, signUp, signIn, signOut, completeOnboarding]);
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signUp, signIn, signOut, completeOnboarding }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from './AuthContext';
 import { useToast } from '../components/ui/Toast';
 import type { UserSettings } from '../types/database';
 
@@ -15,7 +15,16 @@ const DEFAULT_SETTINGS: Omit<UserSettings, 'id' | 'user_id'> = {
   notification_enabled: true,
 };
 
-export function useSettings() {
+interface SettingsContextType {
+  settings: UserSettings;
+  loading: boolean;
+  updateSetting: (key: keyof Omit<UserSettings, 'id' | 'user_id'>, value: number | boolean) => void;
+  lastSaved: number | null;
+}
+
+const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
+
+export function SettingsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [settings, setSettings] = useState<UserSettings | null>(null);
@@ -61,9 +70,12 @@ export function useSettings() {
     fetchSettings();
   }, [user, showToast]);
 
+  const settingsIdRef = useRef(settings?.id);
+  settingsIdRef.current = settings?.id;
+
   const updateSetting = useCallback(
     (key: keyof Omit<UserSettings, 'id' | 'user_id'>, value: number | boolean) => {
-      if (!settings) return;
+      if (!settingsIdRef.current) return;
 
       setSettings((prev) => (prev ? { ...prev, [key]: value } : prev));
 
@@ -73,7 +85,7 @@ export function useSettings() {
           const { error } = await supabase
             .from('user_settings')
             .update({ [key]: value })
-            .eq('id', settings.id);
+            .eq('id', settingsIdRef.current!);
           if (error) throw error;
           setLastSaved(Date.now());
         } catch {
@@ -81,14 +93,31 @@ export function useSettings() {
         }
       }, 500);
     },
-    [settings, showToast],
+    [showToast],
   );
 
-  const effectiveSettings = settings ?? {
+  const effectiveSettings = useMemo(() => settings ?? {
     id: '',
     user_id: '',
     ...DEFAULT_SETTINGS,
-  };
+  }, [settings]);
 
-  return { settings: effectiveSettings, loading, updateSetting, lastSaved };
+  const value = useMemo<SettingsContextType>(() => ({
+    settings: effectiveSettings,
+    loading,
+    updateSetting,
+    lastSaved,
+  }), [effectiveSettings, loading, updateSetting, lastSaved]);
+
+  return (
+    <SettingsContext.Provider value={value}>
+      {children}
+    </SettingsContext.Provider>
+  );
+}
+
+export function useSettings() {
+  const ctx = useContext(SettingsContext);
+  if (!ctx) throw new Error('useSettings must be used within SettingsProvider');
+  return ctx;
 }

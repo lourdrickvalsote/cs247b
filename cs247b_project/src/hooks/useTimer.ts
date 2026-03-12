@@ -47,7 +47,7 @@ export function useTimer({ initialSeconds, onComplete, onTick }: UseTimerOptions
         setStatus('completed');
         onCompleteRef.current?.();
       }
-    }, 250);
+    }, 1000);
   }, [clearTimer]);
 
   const start = useCallback((seconds?: number) => {

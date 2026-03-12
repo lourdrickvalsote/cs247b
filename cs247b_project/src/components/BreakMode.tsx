@@ -2,14 +2,11 @@ import { Pause, Play, Square, Plus, ArrowRight } from 'lucide-react';
 import ProgressRing from './ui/ProgressRing';
 import AnimatedDigits from './ui/AnimatedDigits';
 import IconButton from './ui/IconButton';
-import { useSession } from '../contexts/SessionContext';
+import { useSession, useSessionTimer } from '../contexts/SessionContext';
 import GuidedActivityPlayer from './GuidedActivityPlayer';
 
 export default function BreakMode() {
   const {
-    timerRemaining,
-    timerProgress,
-    timerStatus,
     currentActivity,
     pauseTimer,
     resumeTimer,
@@ -17,6 +14,7 @@ export default function BreakMode() {
     extendBreak,
     endSession,
   } = useSession();
+  const { timerRemaining, timerProgress, timerStatus } = useSessionTimer();
 
   const isRunning = timerStatus === 'running';
   const isPaused = timerStatus === 'paused';

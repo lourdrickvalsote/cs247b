@@ -1,13 +1,28 @@
-import { useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from './AuthContext';
 import { useToast } from '../components/ui/Toast';
 import type { BreakActivity, UserActivityPreference, ActivityCategory } from '../types/database';
 
-export function useActivities() {
+interface ActivitiesContextType {
+  /** All non-hidden activities (no category filter) */
+  activities: BreakActivity[];
+  /** Activities filtered by activeCategory and hidden status */
+  filteredActivities: BreakActivity[];
+  favorites: BreakActivity[];
+  loading: boolean;
+  activeCategory: ActivityCategory | 'all';
+  setActiveCategory: (cat: ActivityCategory | 'all') => void;
+  getPreference: (activityId: string) => UserActivityPreference | undefined;
+  toggleFavorite: (activityId: string) => void;
+}
+
+const ActivitiesContext = createContext<ActivitiesContextType | undefined>(undefined);
+
+export function ActivitiesProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const [activities, setActivities] = useState<BreakActivity[]>([]);
+  const [rawActivities, setRawActivities] = useState<BreakActivity[]>([]);
   const [preferences, setPreferences] = useState<UserActivityPreference[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<ActivityCategory | 'all'>('all');
@@ -25,7 +40,7 @@ export function useActivities() {
         if (activitiesRes.error) throw activitiesRes.error;
         if (prefsRes.error) throw prefsRes.error;
 
-        if (activitiesRes.data) setActivities(activitiesRes.data as BreakActivity[]);
+        if (activitiesRes.data) setRawActivities(activitiesRes.data as BreakActivity[]);
         if (prefsRes.data) setPreferences(prefsRes.data as UserActivityPreference[]);
       } catch {
         showToast('Failed to load activities.');
@@ -47,7 +62,7 @@ export function useActivities() {
       if (!user) return;
 
       try {
-        const existing = getPreference(activityId);
+        const existing = preferences.find((p) => p.activity_id === activityId);
         if (existing) {
           const newVal = !existing.is_favorited;
           setPreferences((prev) =>
@@ -77,28 +92,52 @@ export function useActivities() {
         showToast('Failed to update favorite.');
       }
     },
-    [user, getPreference, showToast],
+    [user, preferences, showToast],
   );
 
-  const filteredActivities = activities.filter((a) => {
-    const pref = getPreference(a.id);
-    if (pref?.is_hidden) return false;
-    if (activeCategory === 'all') return true;
-    return a.category === activeCategory;
-  });
+  // All non-hidden activities (used by BreakAlert for suggestions)
+  const activities = useMemo(
+    () => rawActivities.filter((a) => {
+      const pref = preferences.find((p) => p.activity_id === a.id);
+      return !pref?.is_hidden;
+    }),
+    [rawActivities, preferences],
+  );
 
-  const favorites = activities.filter((a) => {
-    const pref = getPreference(a.id);
-    return pref?.is_favorited && !pref.is_hidden;
-  });
+  // Category-filtered activities (used by ActivitiesPage / ActivityPicker)
+  const filteredActivities = useMemo(
+    () => activities.filter((a) => activeCategory === 'all' || a.category === activeCategory),
+    [activities, activeCategory],
+  );
 
-  return {
-    activities: filteredActivities,
+  const favorites = useMemo(
+    () => rawActivities.filter((a) => {
+      const pref = preferences.find((p) => p.activity_id === a.id);
+      return pref?.is_favorited && !pref.is_hidden;
+    }),
+    [rawActivities, preferences],
+  );
+
+  const value = useMemo<ActivitiesContextType>(() => ({
+    activities,
+    filteredActivities,
     favorites,
     loading,
     activeCategory,
     setActiveCategory,
     getPreference,
     toggleFavorite,
-  };
+  }), [activities, filteredActivities, favorites, loading, activeCategory, getPreference, toggleFavorite]);
+
+  return (
+    <ActivitiesContext.Provider value={value}>
+      {children}
+    </ActivitiesContext.Provider>
+  );
+}
+
+export function useActivities() {
+  const ctx = useContext(ActivitiesContext);
+  if (!ctx) throw new Error('useActivities must be used within ActivitiesProvider');
+  return ctx;
 }

@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo, type ReactNode } from 'react';
 import { useTimer, type TimerStatus } from '../hooks/useTimer';
-import { useSettings } from '../hooks/useSettings';
+import { useSettings } from './SettingsContext';
 import { useSessionHistory } from '../hooks/useSessionHistory';
 import { sendNotification, playChime } from '../lib/notifications';
 import type { SessionType, BreakActivity } from '../types/database';
@@ -48,13 +48,11 @@ interface CompletedSessionStats {
   allDone: boolean;
 }
 
+// --- Stable context: phase, session info, and actions (changes infrequently) ---
 interface SessionContextType {
   phase: SessionPhase;
   sessionNumber: number;
   totalPlannedSessions: number;
-  timerRemaining: number;
-  timerProgress: number;
-  timerStatus: TimerStatus;
   currentType: SessionType;
   currentActivity: BreakActivity | null;
   completedStats: CompletedSessionStats | null;
@@ -74,7 +72,15 @@ interface SessionContextType {
   continueStudying: () => void;
 }
 
+// --- Volatile context: timer data that changes every tick ---
+interface SessionTimerContextType {
+  timerRemaining: number;
+  timerProgress: number;
+  timerStatus: TimerStatus;
+}
+
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
+const SessionTimerContext = createContext<SessionTimerContextType | undefined>(undefined);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { settings } = useSettings();
@@ -93,14 +99,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const roundsCompletedRef = useRef(0);
   const [completedStats, setCompletedStats] = useState<CompletedSessionStats | null>(null);
 
-  const getWorkSeconds = () => settings.work_duration_minutes * 60;
-  const getBreakSeconds = () => {
+  // Memoize derived values from settings to stabilize callback dependencies
+  const workSeconds = useMemo(() => settings.work_duration_minutes * 60, [settings.work_duration_minutes]);
+
+  const getBreakSeconds = useCallback(() => {
     const isLongBreak = sessionNumber % settings.sessions_before_long_break === 0;
     return isLongBreak ? settings.long_break_minutes * 60 : settings.short_break_minutes * 60;
-  };
-  const getBreakType = (): SessionType => {
+  }, [sessionNumber, settings.sessions_before_long_break, settings.long_break_minutes, settings.short_break_minutes]);
+
+  const getBreakType = useCallback((): SessionType => {
     return sessionNumber % settings.sessions_before_long_break === 0 ? 'long_break' : 'short_break';
-  };
+  }, [sessionNumber, settings.sessions_before_long_break]);
 
   const handleWorkComplete = useCallback(() => {
     setPhase('break_alert');
@@ -112,20 +121,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       );
     }
 
-    accumulatedWorkSecsRef.current += getWorkSeconds();
+    accumulatedWorkSecsRef.current += workSeconds;
     roundsCompletedRef.current += 1;
 
     saveSession({
       started_at: sessionStartRef.current.toISOString(),
       ended_at: new Date().toISOString(),
       type: 'work',
-      planned_duration_seconds: getWorkSeconds(),
-      actual_duration_seconds: getWorkSeconds(),
+      planned_duration_seconds: workSeconds,
+      actual_duration_seconds: workSeconds,
       completed: true,
       activity_id: null,
       session_group_id: groupIdRef.current,
     });
-  }, [settings, saveSession, sessionNumber]);
+  }, [settings.sound_enabled, settings.notification_enabled, settings.work_duration_minutes, saveSession, workSeconds]);
 
   const handleBreakComplete = useCallback(() => {
     const breakSecs = getBreakSeconds();
@@ -160,12 +169,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setSessionNumber((n) => n + 1);
       setPhase('session_complete');
     } else if (settings.auto_start_work) {
-      const workSecs = getWorkSeconds();
       setSessionNumber((n) => n + 1);
       setCurrentType('work');
       setPhase('working');
       sessionStartRef.current = new Date();
-      workTimer.start(workSecs);
+      workTimer.start(workSeconds);
     } else {
       setCompletedStats({
         roundsCompleted: roundsCompletedRef.current,
@@ -178,10 +186,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setSessionNumber((n) => n + 1);
       setPhase('session_complete');
     }
-  }, [settings, currentActivity, saveSession, sessionNumber, totalPlannedSessions]);
+  }, [getBreakSeconds, getBreakType, settings.sound_enabled, settings.auto_start_work, currentActivity, saveSession, sessionNumber, totalPlannedSessions, workSeconds]);
 
   const workTimer = useTimer({
-    initialSeconds: getWorkSeconds(),
+    initialSeconds: workSeconds,
     onComplete: handleWorkComplete,
   });
 
@@ -191,7 +199,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   });
 
   const startWork = useCallback(() => {
-    const workSecs = getWorkSeconds();
     groupIdRef.current = crypto.randomUUID();
     studySessionStartRef.current = new Date().toISOString();
     accumulatedWorkSecsRef.current = 0;
@@ -203,27 +210,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setPhase('working');
     setCurrentType('work');
     sessionStartRef.current = new Date();
-    workTimer.start(workSecs);
-  }, [workTimer, settings]);
+    workTimer.start(workSeconds);
+  }, [workTimer, settings.sessions_before_long_break, workSeconds]);
 
   const continueStudying = useCallback(() => {
-    const workSecs = getWorkSeconds();
     setTotalPlannedSessions((n) => n + settings.sessions_before_long_break);
     setCompletedStats(null);
     setPhase('working');
     setCurrentType('work');
     sessionStartRef.current = new Date();
-    workTimer.start(workSecs);
-  }, [workTimer, settings]);
+    workTimer.start(workSeconds);
+  }, [workTimer, settings.sessions_before_long_break, workSeconds]);
 
   const startNextRound = useCallback(() => {
-    const workSecs = getWorkSeconds();
     setCompletedStats(null);
     setPhase('working');
     setCurrentType('work');
     sessionStartRef.current = new Date();
-    workTimer.start(workSecs);
-  }, [workTimer, settings]);
+    workTimer.start(workSeconds);
+  }, [workTimer, workSeconds]);
 
   const pauseTimer = useCallback(() => {
     if (phase === 'working') workTimer.pause();
@@ -236,14 +241,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [phase, workTimer, breakTimer]);
 
   const skipToBreak = useCallback(() => {
-    const elapsed = getWorkSeconds() - workTimer.remaining;
+    const elapsed = workSeconds - workTimer.remaining;
     accumulatedWorkSecsRef.current += elapsed;
     roundsCompletedRef.current += 1;
     saveSession({
       started_at: sessionStartRef.current.toISOString(),
       ended_at: new Date().toISOString(),
       type: 'work',
-      planned_duration_seconds: getWorkSeconds(),
+      planned_duration_seconds: workSeconds,
       actual_duration_seconds: elapsed,
       completed: false,
       activity_id: null,
@@ -251,7 +256,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
     workTimer.reset();
     setPhase('break_alert');
-  }, [workTimer, saveSession, settings]);
+  }, [workTimer, saveSession, workSeconds]);
 
   const startBreak = useCallback(
     (activity?: BreakActivity) => {
@@ -263,7 +268,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const seconds = activity ? activity.duration_seconds : getBreakSeconds();
       breakTimer.start(seconds);
     },
-    [breakTimer, settings, sessionNumber],
+    [breakTimer, getBreakType, getBreakSeconds],
   );
 
   const extendWork = useCallback(
@@ -316,14 +321,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setSessionNumber((n) => n + 1);
       setPhase('session_complete');
     } else {
-      const workSecs = getWorkSeconds();
       setSessionNumber((n) => n + 1);
       setCurrentType('work');
       setPhase('working');
       sessionStartRef.current = new Date();
-      workTimer.start(workSecs);
+      workTimer.start(workSeconds);
     }
-  }, [breakTimer, workTimer, currentActivity, saveSession, settings, sessionNumber, totalPlannedSessions]);
+  }, [breakTimer, workTimer, currentActivity, saveSession, getBreakSeconds, getBreakType, sessionNumber, totalPlannedSessions, workSeconds]);
 
   const extendBreak = useCallback(
     (minutes: number) => {
@@ -340,13 +344,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const endSession = useCallback(() => {
     if (phase === 'working') {
-      const elapsed = getWorkSeconds() - workTimer.remaining;
+      const elapsed = workSeconds - workTimer.remaining;
       if (elapsed > 0) {
         saveSession({
           started_at: sessionStartRef.current.toISOString(),
           ended_at: new Date().toISOString(),
           type: 'work',
-          planned_duration_seconds: getWorkSeconds(),
+          planned_duration_seconds: workSeconds,
           actual_duration_seconds: elapsed,
           completed: false,
           activity_id: null,
@@ -360,10 +364,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     groupIdRef.current = null;
     setPhase('idle');
     saveToStorage(null);
-  }, [workTimer, breakTimer, phase, saveSession, settings]);
+  }, [workTimer, breakTimer, phase, saveSession, workSeconds]);
 
   const resetAll = useCallback(() => {
-    workTimer.reset(getWorkSeconds());
+    workTimer.reset(workSeconds);
     breakTimer.reset(getBreakSeconds());
     setSessionNumber(1);
     setTotalPlannedSessions(settings.sessions_before_long_break);
@@ -376,13 +380,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     roundsCompletedRef.current = 0;
     setPhase('idle');
     saveToStorage(null);
-  }, [workTimer, breakTimer, settings]);
+  }, [workTimer, breakTimer, settings.sessions_before_long_break, workSeconds, getBreakSeconds]);
 
   // --- Persist active session to localStorage ---
   const persistSession = useCallback(() => {
     if (phase === 'working' || phase === 'breaking') {
       const timer = phase === 'working' ? workTimer : breakTimer;
-      const planned = phase === 'working' ? getWorkSeconds() : getBreakSeconds();
+      const planned = phase === 'working' ? workSeconds : getBreakSeconds();
       saveToStorage({
         phase,
         sessionNumber,
@@ -396,12 +400,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     } else {
       saveToStorage(null);
     }
-  }, [phase, sessionNumber, currentType, workTimer, breakTimer, settings]);
+  }, [phase, sessionNumber, currentType, workTimer, breakTimer, workSeconds, getBreakSeconds]);
 
-  // Persist whenever key state changes
+  // Persist whenever key state changes (only on phase/status transitions, not every tick)
   useEffect(() => {
     persistSession();
-  }, [phase, workTimer.status, persistSession]);
+  }, [phase, workTimer.status, breakTimer.status, persistSession]);
 
   // Restore session on mount
   const restoredRef = useRef(false);
@@ -454,40 +458,59 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const activeTimer = phase === 'working' ? workTimer : breakTimer;
 
+  // Memoize stable context value — only changes when phase/session state changes
+  const sessionValue = useMemo<SessionContextType>(() => ({
+    phase,
+    sessionNumber,
+    totalPlannedSessions,
+    currentType,
+    currentActivity,
+    completedStats,
+    startWork,
+    startNextRound,
+    pauseTimer,
+    resumeTimer,
+    skipToBreak,
+    startBreak,
+    extendWork,
+    endBreakEarly,
+    extendBreak,
+    endSession,
+    resetAll,
+    cancelActivity,
+    continueStudying,
+  }), [
+    phase, sessionNumber, totalPlannedSessions, currentType, currentActivity, completedStats,
+    startWork, startNextRound, pauseTimer, resumeTimer, skipToBreak, startBreak,
+    extendWork, endBreakEarly, extendBreak, endSession, resetAll, cancelActivity, continueStudying,
+  ]);
+
+  // Memoize volatile timer context — changes every tick, but only timer-consuming components subscribe
+  const timerValue = useMemo<SessionTimerContextType>(() => ({
+    timerRemaining: activeTimer.remaining,
+    timerProgress: activeTimer.progress,
+    timerStatus: activeTimer.status,
+  }), [activeTimer.remaining, activeTimer.progress, activeTimer.status]);
+
   return (
-    <SessionContext.Provider
-      value={{
-        phase,
-        sessionNumber,
-        totalPlannedSessions,
-        timerRemaining: activeTimer.remaining,
-        timerProgress: activeTimer.progress,
-        timerStatus: activeTimer.status,
-        currentType,
-        currentActivity,
-        completedStats,
-        startWork,
-        startNextRound,
-        pauseTimer,
-        resumeTimer,
-        skipToBreak,
-        startBreak,
-        extendWork,
-        endBreakEarly,
-        extendBreak,
-        endSession,
-        resetAll,
-        cancelActivity,
-        continueStudying,
-      }}
-    >
-      {children}
+    <SessionContext.Provider value={sessionValue}>
+      <SessionTimerContext.Provider value={timerValue}>
+        {children}
+      </SessionTimerContext.Provider>
     </SessionContext.Provider>
   );
 }
 
+/** Use for phase, session info, and actions — does NOT re-render on timer ticks */
 export function useSession() {
   const ctx = useContext(SessionContext);
   if (!ctx) throw new Error('useSession must be used within SessionProvider');
+  return ctx;
+}
+
+/** Use for timer data (remaining, progress, status) — re-renders every tick */
+export function useSessionTimer() {
+  const ctx = useContext(SessionTimerContext);
+  if (!ctx) throw new Error('useSessionTimer must be used within SessionProvider');
   return ctx;
 }

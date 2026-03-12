@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Clock, Coffee, Target, ArrowRight, BarChart3 } from 'lucide-react';
 import Button from './ui/Button';
@@ -32,7 +33,7 @@ export default function SessionComplete() {
     navigate('/history');
   };
 
-  const confettiParticles = allSessionsDone ? Array.from({ length: 10 }).map((_, i) => {
+  const confettiParticles = useMemo(() => allSessionsDone ? Array.from({ length: 10 }).map((_, i) => {
     const angle = (i / 10) * 360;
     const rad = (angle * Math.PI) / 180;
     const dist = 40 + Math.random() * 30;
@@ -40,7 +41,7 @@ export default function SessionComplete() {
     const y = Math.sin(rad) * dist;
     const colors = ['#2E6F40', '#B8C5D6', '#A39BA8', '#63A875', '#418d57'];
     return { x, y, color: colors[i % colors.length], delay: i * 60 };
-  }) : [];
+  }) : [], [allSessionsDone]);
 
   if (allSessionsDone) {
     return (

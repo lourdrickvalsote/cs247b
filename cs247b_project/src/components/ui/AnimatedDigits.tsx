@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 
 interface AnimatedDigitsProps {
   value: number;
@@ -6,7 +6,7 @@ interface AnimatedDigitsProps {
   className?: string;
 }
 
-function Digit({ char, animating }: { char: string; animating: boolean }) {
+const Digit = memo(function Digit({ char, animating }: { char: string; animating: boolean }) {
   const [display, setDisplay] = useState(char);
   const [prev, setPrev] = useState(char);
   const [flip, setFlip] = useState(false);
@@ -57,7 +57,7 @@ function Digit({ char, animating }: { char: string; animating: boolean }) {
       )}
     </span>
   );
-}
+});
 
 export default function AnimatedDigits({
   value,

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { memo, useRef, useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Timer, Leaf, BarChart3, Settings } from 'lucide-react';
 
@@ -9,7 +9,7 @@ const links = [
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
-export default function BottomNav() {
+export default memo(function BottomNav() {
   const location = useLocation();
   const navRef = useRef<HTMLDivElement>(null);
   const [pillStyle, setPillStyle] = useState({ left: 0, width: 0 });
@@ -78,4 +78,4 @@ export default function BottomNav() {
       <div className="h-[env(safe-area-inset-bottom)]" />
     </nav>
   );
-}
+})

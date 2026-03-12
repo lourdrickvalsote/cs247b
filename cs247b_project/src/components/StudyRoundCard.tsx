@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Clock, Coffee, CheckCircle2, AlertCircle, ChevronRight } from 'lucide-react';
 import Card from './ui/Card';
 import { getCategoryLabel, getCategoryStyles } from '../lib/format';
@@ -9,7 +10,7 @@ interface StudyRoundCardProps {
   onClick: () => void;
 }
 
-export default function StudyRoundCard({ round, delay, onClick }: StudyRoundCardProps) {
+export default memo(function StudyRoundCard({ round, delay, onClick }: StudyRoundCardProps) {
   const { rounds } = round;
   const workMins = Math.round(round.totalWorkSeconds / 60);
   const breakMins = Math.round(round.totalBreakSeconds / 60);
@@ -105,4 +106,4 @@ export default function StudyRoundCard({ round, delay, onClick }: StudyRoundCard
       </Card>
     </div>
   );
-}
+})

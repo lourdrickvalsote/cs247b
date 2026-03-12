@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 
 interface ProgressRingProps {
   progress: number;
@@ -12,7 +12,7 @@ interface ProgressRingProps {
   ariaLabel?: string;
 }
 
-export default function ProgressRing({
+export default memo(function ProgressRing({
   progress,
   size = 240,
   strokeWidth = 8,
@@ -36,7 +36,7 @@ export default function ProgressRing({
     };
   }, [clampedProgress, size, radius]);
 
-  const glowId = `glow-${size}`;
+  const glowId = useMemo(() => `glow-${size}`, [size]);
 
   return (
     <div
@@ -109,4 +109,4 @@ export default function ProgressRing({
       </div>
     </div>
   );
-}
+})

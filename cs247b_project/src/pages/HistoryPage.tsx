@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Clock, Trophy, Coffee, ChevronLeft, ChevronRight, Calendar, Filter } from 'lucide-react';
 import Card from '../components/ui/Card';
 import AnimatedCounter from '../components/ui/AnimatedCounter';
@@ -260,7 +260,7 @@ function EmptyState({ hasFilters }: { hasFilters: boolean }) {
 }
 
 function RoundList({ rounds, onSelect }: { rounds: StudyRound[]; onSelect: (r: StudyRound) => void }) {
-  const grouped = groupByDate(rounds);
+  const grouped = useMemo(() => groupByDate(rounds), [rounds]);
   let itemIndex = 0;
 
   return (

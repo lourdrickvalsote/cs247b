@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, Heart, Clock, Layers, StretchHorizontal, Wind, ScanLine, Footprints, Eye } from 'lucide-react';
 import Badge from './ui/Badge';
 import Card from './ui/Card';
-import { useActivities } from '../hooks/useActivities';
+import { useActivities } from '../contexts/ActivitiesContext';
 import { getCategoryLabel, getCategoryStyles } from '../lib/format';
 import { getActivityIcon } from '../lib/icons';
 import type { BreakActivity, ActivityCategory } from '../types/database';
@@ -25,7 +25,7 @@ interface ActivityPickerProps {
 }
 
 export default function ActivityPicker({ onSelect, onBack }: ActivityPickerProps) {
-  const { activities, favorites, activeCategory, setActiveCategory, getPreference, toggleFavorite } =
+  const { filteredActivities: activities, favorites, activeCategory, setActiveCategory, getPreference, toggleFavorite } =
     useActivities();
 
   return (

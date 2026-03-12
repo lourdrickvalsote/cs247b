@@ -3,7 +3,7 @@ import { Heart, Clock, Leaf, StretchHorizontal, Wind, ScanLine, Footprints, Eye,
 import Badge from '../components/ui/Badge';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
-import { useActivities } from '../hooks/useActivities';
+import { useActivities } from '../contexts/ActivitiesContext';
 import { getCategoryLabel, getCategoryStyles } from '../lib/format';
 import { getActivityIcon } from '../lib/icons';
 import type { BreakActivity, ActivityCategory } from '../types/database';
@@ -21,7 +21,7 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
 };
 
 export default function ActivitiesPage() {
-  const { activities, favorites, loading, activeCategory, setActiveCategory, getPreference, toggleFavorite } =
+  const { filteredActivities: activities, favorites, loading, activeCategory, setActiveCategory, getPreference, toggleFavorite } =
     useActivities();
   const [selectedActivity, setSelectedActivity] = useState<BreakActivity | null>(null);
 

@@ -5,8 +5,8 @@ import AnimatedDigits from '../components/ui/AnimatedDigits';
 import Button from '../components/ui/Button';
 import IconButton from '../components/ui/IconButton';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
-import { useSession } from '../contexts/SessionContext';
-import { useSettings } from '../hooks/useSettings';
+import { useSession, useSessionTimer } from '../contexts/SessionContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { useSessionHistory } from '../hooks/useSessionHistory';
 import { formatMinutes } from '../lib/format';
 import BreakAlert from '../components/BreakAlert';
@@ -18,15 +18,13 @@ export default function TimerPage() {
     phase,
     sessionNumber,
     totalPlannedSessions,
-    timerRemaining,
-    timerProgress,
-    timerStatus,
     startWork,
     pauseTimer,
     resumeTimer,
     skipToBreak,
     endSession,
   } = useSession();
+  const { timerRemaining, timerProgress, timerStatus } = useSessionTimer();
   const { settings } = useSettings();
   const { todayWorkSeconds, todayCompletedSessions } = useSessionHistory();
   const [confirmEnd, setConfirmEnd] = useState(false);

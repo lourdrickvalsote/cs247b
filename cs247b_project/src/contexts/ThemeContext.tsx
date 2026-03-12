@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -27,14 +27,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return stored ?? 'system';
   });
 
-  useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+  // Track the system theme in state so isDark doesn't call matchMedia on every render
+  const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(getSystemTheme);
 
   useEffect(() => {
-    if (theme !== 'system') return;
+    applyTheme(theme);
+  }, [theme, systemTheme]);
+
+  useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = () => applyTheme('system');
+    const handler = () => {
+      setSystemTheme(mq.matches ? 'dark' : 'light');
+      if (theme === 'system') applyTheme('system');
+    };
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   }, [theme]);
@@ -44,10 +49,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeState(next);
   }, []);
 
-  const isDark = theme === 'system' ? getSystemTheme() === 'dark' : theme === 'dark';
+  const isDark = theme === 'system' ? systemTheme === 'dark' : theme === 'dark';
+
+  const value = useMemo<ThemeContextType>(() => ({
+    theme, setTheme, isDark,
+  }), [theme, setTheme, isDark]);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, isDark }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

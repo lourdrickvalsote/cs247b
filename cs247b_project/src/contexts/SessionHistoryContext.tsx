@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useToast } from '../components/ui/Toast';
@@ -14,7 +14,6 @@ interface DateRange {
 }
 
 interface SessionHistoryContextType {
-  sessions: Session[];
   todayWorkSeconds: number;
   todayBreakCount: number;
   todayCompletedSessions: number;
@@ -73,41 +72,37 @@ function filterRounds(rounds: StudyRound[], typeFilter: TypeFilter): StudyRound[
 export function SessionHistoryProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const [allSessions, setAllSessions] = useState<Session[]>([]);
   const [allRounds, setAllRounds] = useState<StudyRound[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [datePreset, setDatePreset] = useState<DatePreset>('week');
   const [customRange, setCustomRange] = useState<DateRange | null>(null);
+  const [debouncedCustomRange, setDebouncedCustomRange] = useState<DateRange | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [page, setPage] = useState(1);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchTodaySessions = useCallback(async () => {
-    if (!user) return;
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    try {
-      const { data, error } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('started_at', startOfDay.toISOString())
-        .order('started_at', { ascending: false });
-
-      if (error) throw error;
-      if (data) setAllSessions(data as Session[]);
-    } catch {
-      showToast('Failed to load today\'s sessions. Check your connection.');
+  // Debounce custom range changes to avoid firing a query per keystroke/click
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (customRange === null) {
+      setDebouncedCustomRange(null);
+      return;
     }
-  }, [user, showToast]);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedCustomRange(customRange);
+    }, 400);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [customRange]);
 
   const fetchFilteredSessions = useCallback(async () => {
     if (!user) return;
     setLoading(true);
 
     try {
-      const effectiveRange = customRange ?? getDateRangeForPreset(datePreset);
+      const effectiveRange = debouncedCustomRange ?? getDateRangeForPreset(datePreset);
 
       let query = supabase
         .from('sessions')
@@ -134,11 +129,7 @@ export function SessionHistoryProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user, datePreset, customRange, showToast]);
-
-  useEffect(() => {
-    fetchTodaySessions();
-  }, [fetchTodaySessions]);
+  }, [user, datePreset, debouncedCustomRange, showToast]);
 
   useEffect(() => {
     fetchFilteredSessions();
@@ -161,66 +152,100 @@ export function SessionHistoryProvider({ children }: { children: ReactNode }) {
         if (error) throw error;
         if (data) {
           const saved = data as Session;
-          setAllSessions((prev) => [saved, ...prev]);
-          fetchFilteredSessions();
+          // Optimistically update rounds by re-grouping with the new session
+          setAllRounds((prev) => {
+            const asWithActivity: SessionWithActivity = { ...saved, break_activities: null };
+            const existingSessions: SessionWithActivity[] = [];
+            for (const round of prev) {
+              for (const pair of round.rounds) {
+                if (pair.workSession) existingSessions.push(pair.workSession);
+                if (pair.breakSession) existingSessions.push(pair.breakSession);
+              }
+            }
+            existingSessions.unshift(asWithActivity);
+            return groupSessionsIntoRounds(existingSessions);
+          });
         }
       } catch {
         showToast('Failed to save session. Your progress may not be recorded.');
       }
     },
-    [user, fetchFilteredSessions, showToast],
+    [user, showToast],
   );
 
-  const todaySessions = allSessions.filter((s) => {
+  // --- Derive today stats from allRounds (no separate query needed) ---
+  const allFlatSessions = useMemo(() => {
+    const sessions: SessionWithActivity[] = [];
+    for (const round of allRounds) {
+      for (const pair of round.rounds) {
+        if (pair.workSession) sessions.push(pair.workSession);
+        if (pair.breakSession) sessions.push(pair.breakSession);
+      }
+    }
+    return sessions;
+  }, [allRounds]);
+
+  const todaySessions = useMemo(() => {
     const today = new Date().toDateString();
-    return new Date(s.started_at).toDateString() === today;
-  });
+    return allFlatSessions.filter((s) => new Date(s.started_at).toDateString() === today);
+  }, [allFlatSessions]);
 
-  const todayWorkSeconds = todaySessions
-    .filter((s) => s.type === 'work' && s.completed)
-    .reduce((sum, s) => sum + s.actual_duration_seconds, 0);
+  const todayWorkSeconds = useMemo(
+    () => todaySessions
+      .filter((s) => s.type === 'work' && s.completed)
+      .reduce((sum, s) => sum + s.actual_duration_seconds, 0),
+    [todaySessions],
+  );
 
-  const todayBreakCount = todaySessions.filter(
-    (s) => (s.type === 'short_break' || s.type === 'long_break') && s.completed,
-  ).length;
+  const todayBreakCount = useMemo(
+    () => todaySessions.filter(
+      (s) => (s.type === 'short_break' || s.type === 'long_break') && s.completed,
+    ).length,
+    [todaySessions],
+  );
 
-  const todayCompletedSessions = todaySessions.filter((s) => s.type === 'work' && s.completed).length;
+  const todayCompletedSessions = useMemo(
+    () => todaySessions.filter((s) => s.type === 'work' && s.completed).length,
+    [todaySessions],
+  );
 
   const refetch = useCallback(() => {
-    fetchTodaySessions();
     fetchFilteredSessions();
-  }, [fetchTodaySessions, fetchFilteredSessions]);
+  }, [fetchFilteredSessions]);
 
-  const filtered = filterRounds(allRounds, typeFilter);
+  const filtered = useMemo(() => filterRounds(allRounds, typeFilter), [allRounds, typeFilter]);
   const totalCount = filtered.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const offset = (page - 1) * PAGE_SIZE;
-  const rounds = filtered.slice(offset, offset + PAGE_SIZE);
+  const rounds = useMemo(() => filtered.slice(offset, offset + PAGE_SIZE), [filtered, offset]);
+
+  const value = useMemo<SessionHistoryContextType>(() => ({
+    todayWorkSeconds,
+    todayBreakCount,
+    todayCompletedSessions,
+    loading,
+    saveSession,
+    refetch,
+    rounds,
+    datePreset,
+    setDatePreset,
+    setCustomRange,
+    customRange,
+    typeFilter,
+    setTypeFilter,
+    page,
+    setPage,
+    pageSize: PAGE_SIZE,
+    totalCount,
+    totalPages,
+  }), [
+    todayWorkSeconds, todayBreakCount, todayCompletedSessions,
+    loading, saveSession, refetch, rounds, datePreset, customRange, typeFilter,
+    page, totalCount, totalPages,
+  ]);
 
   return (
-    <SessionHistoryContext.Provider
-      value={{
-        sessions: allSessions,
-        todayWorkSeconds,
-        todayBreakCount,
-        todayCompletedSessions,
-        loading,
-        saveSession,
-        refetch,
-        rounds,
-        datePreset,
-        setDatePreset,
-        setCustomRange,
-        customRange,
-        typeFilter,
-        setTypeFilter,
-        page,
-        setPage,
-        pageSize: PAGE_SIZE,
-        totalCount,
-        totalPages,
-      }}
-    >
+    <SessionHistoryContext.Provider value={value}>
       {children}
     </SessionHistoryContext.Provider>
   );
