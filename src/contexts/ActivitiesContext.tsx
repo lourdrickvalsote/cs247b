@@ -104,10 +104,22 @@ export function ActivitiesProvider({ children }: { children: ReactNode }) {
     [rawActivities, preferences],
   );
 
-  // Category-filtered activities (used by ActivitiesPage / ActivityPicker)
+  const favoriteIds = useMemo(
+    () => new Set(
+      preferences
+        .filter((p) => p.is_favorited && !p.is_hidden)
+        .map((p) => p.activity_id),
+    ),
+    [preferences],
+  );
+
   const filteredActivities = useMemo(
-    () => activities.filter((a) => activeCategory === 'all' || a.category === activeCategory),
-    [activities, activeCategory],
+    () => activities.filter((a) => {
+      if (activeCategory !== 'all' && a.category !== activeCategory) return false;
+      if (activeCategory === 'all' && favoriteIds.has(a.id)) return false;
+      return true;
+    }),
+    [activities, activeCategory, favoriteIds],
   );
 
   const favorites = useMemo(
