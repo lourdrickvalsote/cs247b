@@ -98,7 +98,7 @@ export default function HistoryPage() {
           { icon: Clock, value: formatMinutes(todayWorkSeconds), label: 'Focus Today', delay: 0, gradient: 'bg-gradient-to-br from-forest-50/50 to-transparent dark:from-forest-950/20', iconBg: 'bg-forest-100 dark:bg-forest-900/40', iconColor: 'text-forest' },
           { icon: Trophy, value: `${todayCompletedSessions}`, label: 'Sessions', delay: 80, gradient: 'bg-gradient-to-br from-powder-50 to-transparent dark:from-powder-950/20', iconBg: 'bg-powder-200 dark:bg-powder-900/40', iconColor: 'text-powder-700 dark:text-powder-300' },
           { icon: Coffee, value: `${todayBreakCount}`, label: 'Breaks', delay: 160, gradient: 'bg-gradient-to-br from-lilac-50/50 to-transparent dark:from-lilac-950/20', iconBg: 'bg-lilac-100 dark:bg-lilac-950/40', iconColor: 'text-lilac-600 dark:text-lilac-400' },
-          ...(todayAvgRestoration !== null ? [{ icon: Sparkles, value: todayAvgRestoration.toFixed(1), label: 'Avg Restore', delay: 240, gradient: 'bg-gradient-to-br from-forest-50/50 to-transparent dark:from-forest-950/20', iconBg: 'bg-forest-100 dark:bg-forest-900/40', iconColor: 'text-forest' }] : []),
+          ...(todayAvgRestoration !== null ? [{ icon: Sparkles, value: todayAvgRestoration.toFixed(1), label: 'Avg Restore', delay: 240, gradient: 'bg-gradient-to-br from-forest-50/50 to-transparent dark:from-forest-950/20 ring-1 ring-forest/20', iconBg: 'bg-forest-100 dark:bg-forest-900/40', iconColor: 'text-forest' }] : []),
         ].map(({ icon: StatIcon, value, label, delay, gradient, iconBg, iconColor }) => (
           <div
             key={label}

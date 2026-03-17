@@ -28,7 +28,7 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const { showToast } = useToast();
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,6 +45,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const cacheKey = CACHE_KEYS.settings(user.id);
 
     const fetchSettings = async () => {
+      // Guest mode: load from cache only, no Supabase
+      if (isGuest) {
+        const cached = cacheGet<UserSettings>(cacheKey);
+        setSettings(cached ?? { id: 'guest-settings', user_id: 'guest', ...DEFAULT_SETTINGS });
+        setLoading(false);
+        return;
+      }
+
       try {
         const { data, error } = await supabase
           .from('user_settings')
@@ -86,6 +94,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const persistToSupabase = useCallback(
     async (updates: Record<string, unknown>, settingsId: string) => {
+      // Guest mode: localStorage only
+      if (isGuest) {
+        setLastSaved(Date.now());
+        return;
+      }
       try {
         const { error } = await supabase
           .from('user_settings')
@@ -98,7 +111,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         setLastSaved(Date.now());
       }
     },
-    [],
+    [isGuest],
   );
 
   const updateSetting = useCallback(

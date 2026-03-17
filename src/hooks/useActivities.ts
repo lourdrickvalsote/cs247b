@@ -8,7 +8,7 @@ import { cacheGet, cacheSet, queueWrite, CACHE_KEYS } from '../lib/fallbackStora
 import type { BreakActivity, UserActivityPreference, ActivityCategory } from '../types/database';
 
 export function useActivities() {
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const { settings } = useSettings();
   const { showToast } = useToast();
   const { customActivities, createActivity, updateActivity, deleteActivity, isCustomActivity } =
@@ -29,6 +29,28 @@ export function useActivities() {
     const prefsKey = CACHE_KEYS.activityPrefs(user.id);
 
     const load = async () => {
+      // Guest mode: fetch default activities from Supabase (public read),
+      // load user preferences from cache only
+      if (isGuest) {
+        try {
+          const activitiesRes = await supabase
+            .from('break_activities')
+            .select('*')
+            .eq('is_default', true);
+          if (activitiesRes.data) {
+            setDefaultActivities(activitiesRes.data as BreakActivity[]);
+            cacheSet(CACHE_KEYS.activities, activitiesRes.data);
+          }
+        } catch {
+          const cachedActivities = cacheGet<BreakActivity[]>(CACHE_KEYS.activities);
+          if (cachedActivities) setDefaultActivities(cachedActivities);
+        }
+        const cachedPrefs = cacheGet<UserActivityPreference[]>(prefsKey);
+        if (cachedPrefs) setPreferences(cachedPrefs);
+        setLoading(false);
+        return;
+      }
+
       try {
         const [activitiesRes, prefsRes] = await Promise.all([
           supabase.from('break_activities').select('*').eq('is_default', true),
@@ -59,7 +81,7 @@ export function useActivities() {
     };
 
     load();
-  }, [user, showToast]);
+  }, [user, isGuest, showToast]);
 
   const getPreference = useCallback(
     (activityId: string) => preferences.find((p) => p.activity_id === activityId),
@@ -80,6 +102,9 @@ export function useActivities() {
         );
         setPreferences(updated);
         cacheSet(prefsKey, updated);
+
+        // Guest mode: local only
+        if (isGuest) return;
 
         try {
           const { error } = await supabase
@@ -107,6 +132,9 @@ export function useActivities() {
         const updated = [...preferences, newPref];
         setPreferences(updated);
         cacheSet(prefsKey, updated);
+
+        // Guest mode: local only
+        if (isGuest) return;
 
         try {
           const { data, error } = await supabase
@@ -138,7 +166,7 @@ export function useActivities() {
         }
       }
     },
-    [user, getPreference, preferences],
+    [user, isGuest, getPreference, preferences],
   );
 
   const hiddenCategories = settings.hidden_categories ?? [];

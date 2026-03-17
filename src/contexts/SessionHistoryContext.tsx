@@ -75,7 +75,7 @@ function filterRounds(rounds: StudyRound[], typeFilter: TypeFilter): StudyRound[
 }
 
 export function SessionHistoryProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const { showToast } = useToast();
   const [allSessions, setAllSessions] = useState<Session[]>([]);
   const [allRounds, setAllRounds] = useState<StudyRound[]>([]);
@@ -91,6 +91,13 @@ export function SessionHistoryProvider({ children }: { children: ReactNode }) {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const sessionsKey = CACHE_KEYS.sessions(user.id);
+
+    // Guest mode: load from cache only
+    if (isGuest) {
+      const cached = cacheGet<Session[]>(sessionsKey);
+      if (cached) setAllSessions(cached);
+      return;
+    }
 
     try {
       const { data, error } = await supabase
@@ -114,7 +121,7 @@ export function SessionHistoryProvider({ children }: { children: ReactNode }) {
         showToast('Failed to load today\'s sessions. Check your connection.');
       }
     }
-  }, [user, showToast]);
+  }, [user, isGuest, showToast]);
 
   // Build rounds from local session data (used as fallback and for immediate updates)
   const buildRoundsFromLocal = useCallback((sessions: Session[]) => {
@@ -133,6 +140,16 @@ export function SessionHistoryProvider({ children }: { children: ReactNode }) {
   const fetchFilteredSessions = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+
+    // Guest mode: build rounds from cached sessions
+    if (isGuest) {
+      const cached = cacheGet<Session[]>(CACHE_KEYS.sessions(user.id));
+      if (cached && cached.length > 0) {
+        setAllRounds(buildRoundsFromLocal(cached));
+      }
+      setLoading(false);
+      return;
+    }
 
     try {
       const effectiveRange = customRange ?? getDateRangeForPreset(datePreset);
@@ -167,7 +184,7 @@ export function SessionHistoryProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user, datePreset, customRange, buildRoundsFromLocal]);
+  }, [user, isGuest, datePreset, customRange, buildRoundsFromLocal]);
 
   useEffect(() => {
     fetchTodaySessions();
@@ -209,6 +226,9 @@ export function SessionHistoryProvider({ children }: { children: ReactNode }) {
         setCheckinSessions((prev) => [localSession, ...prev]);
       }
 
+      // Guest mode: local only, skip Supabase
+      if (isGuest) return;
+
       try {
         const { data, error } = await supabase
           .from('sessions')
@@ -232,7 +252,7 @@ export function SessionHistoryProvider({ children }: { children: ReactNode }) {
         queueWrite('sessions', 'insert', { ...session, user_id: user.id });
       }
     },
-    [user],
+    [user, isGuest],
   );
 
   const todaySessions = allSessions.filter((s) => {
@@ -241,14 +261,14 @@ export function SessionHistoryProvider({ children }: { children: ReactNode }) {
   });
 
   const todayWorkSeconds = todaySessions
-    .filter((s) => s.type === 'work' && s.completed)
+    .filter((s) => s.type === 'work')
     .reduce((sum, s) => sum + s.actual_duration_seconds, 0);
 
   const todayBreakCount = todaySessions.filter(
-    (s) => (s.type === 'short_break' || s.type === 'long_break') && s.completed,
+    (s) => s.type === 'short_break' || s.type === 'long_break',
   ).length;
 
-  const todayCompletedSessions = todaySessions.filter((s) => s.type === 'work' && s.completed).length;
+  const todayCompletedSessions = todaySessions.filter((s) => s.type === 'work').length;
 
   const todayAvgRestoration = (() => {
     const rated = todaySessions.filter(s => s.restoration_rating != null);
@@ -260,6 +280,14 @@ export function SessionHistoryProvider({ children }: { children: ReactNode }) {
 
   const fetchCheckinSessions = useCallback(async () => {
     if (!user) return;
+    // Guest mode: filter from local sessions
+    if (isGuest) {
+      const cached = cacheGet<Session[]>(CACHE_KEYS.sessions(user.id));
+      if (cached) {
+        setCheckinSessions(cached.filter((s) => s.pre_work_tiredness != null));
+      }
+      return;
+    }
     try {
       const { data, error } = await supabase
         .from('sessions')
@@ -272,7 +300,7 @@ export function SessionHistoryProvider({ children }: { children: ReactNode }) {
     } catch {
       // silent — non-critical stats
     }
-  }, [user]);
+  }, [user, isGuest]);
 
   useEffect(() => {
     fetchCheckinSessions();

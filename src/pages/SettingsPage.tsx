@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { LogOut, Minus, Plus, Sun, Moon, Monitor, StretchHorizontal, Wind, Brain, Footprints, Eye, Save } from 'lucide-react';
+import { LogOut, Minus, Plus, Sun, Moon, Monitor, StretchHorizontal, Wind, Brain, Footprints, Eye, Save, Bell } from 'lucide-react';
+import { getReminderSettings, setReminderSettings, type ReminderSettings } from '../lib/reminders';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -12,7 +13,7 @@ import type { UserSettings } from '../types/database';
 type SettingsKey = keyof Omit<UserSettings, 'id' | 'user_id'>;
 
 export default function SettingsPage() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isGuest } = useAuth();
   const { settings, loading, bulkUpdate } = useSettings();
   const { theme, setTheme } = useTheme();
   const [confirmSignOut, setConfirmSignOut] = useState(false);
@@ -30,6 +31,17 @@ export default function SettingsPage() {
   const toggleVoice = useCallback((v: boolean) => {
     setVoiceEnabled(v);
     localStorage.setItem('brevi_voice_guidance', String(v));
+  }, []);
+
+  // Study reminders — localStorage only
+  const [reminder, setReminder] = useState<ReminderSettings>(() => getReminderSettings());
+  const updateReminder = useCallback(async (next: ReminderSettings) => {
+    if (next.enabled && 'Notification' in window && Notification.permission !== 'granted') {
+      const result = await Notification.requestPermission();
+      if (result !== 'granted') return;
+    }
+    setReminder(next);
+    setReminderSettings(next);
   }, []);
 
   // Sync draft from settings when settings first load (or reset after save)
@@ -62,7 +74,7 @@ export default function SettingsPage() {
     await bulkUpdate(draft);
     setSaving(false);
     setShowSaved(true);
-    setTimeout(() => setShowSaved(false), 1500);
+    setTimeout(() => setShowSaved(false), 2500);
     // Reset draft to null so it re-syncs from the updated settings
     setDraft(null);
   };
@@ -92,7 +104,7 @@ export default function SettingsPage() {
       </div>
       <p className="text-sm text-lilac-600 mb-6">Customize your study sessions.</p>
 
-      <section className="mb-6 animate-slide-up" style={{ animationDelay: '0ms' }}>
+      <section className="mb-8 animate-slide-up" style={{ animationDelay: '0ms' }}>
         <h2 className="text-xs font-semibold text-lilac uppercase tracking-wider mb-3">
           Timer
         </h2>
@@ -139,7 +151,7 @@ export default function SettingsPage() {
         </Card>
       </section>
 
-      <section className="mb-6 animate-slide-up" style={{ animationDelay: '80ms' }}>
+      <section className="mb-8 animate-slide-up" style={{ animationDelay: '80ms' }}>
         <h2 className="text-xs font-semibold text-lilac uppercase tracking-wider mb-3">
           Automation
         </h2>
@@ -162,7 +174,7 @@ export default function SettingsPage() {
         </Card>
       </section>
 
-      <section className="mb-6 animate-slide-up" style={{ animationDelay: '160ms' }}>
+      <section className="mb-8 animate-slide-up" style={{ animationDelay: '160ms' }}>
         <h2 className="text-xs font-semibold text-lilac uppercase tracking-wider mb-3">
           Notifications
         </h2>
@@ -198,7 +210,43 @@ export default function SettingsPage() {
         </Card>
       </section>
 
-      <section className="mb-6 animate-slide-up" style={{ animationDelay: '240ms' }}>
+      <section className="mb-8 animate-slide-up" style={{ animationDelay: '200ms' }}>
+        <h2 className="text-xs font-semibold text-lilac uppercase tracking-wider mb-3">
+          Study Reminders
+        </h2>
+        <Card>
+          <div className="space-y-4">
+            <ToggleSetting
+              label="Daily study reminder"
+              description="Get notified to study if you haven't started a session yet"
+              value={reminder.enabled}
+              onChange={(v) => updateReminder({ ...reminder, enabled: v })}
+            />
+            {reminder.enabled && (
+              <div className="animate-slide-up">
+                <div className="border-t border-powder-100 dark:border-jet-700 mb-4" />
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-lilac-400" />
+                    <div>
+                      <p className="text-sm font-medium text-jet dark:text-jet-100">Reminder time</p>
+                      <p className="text-xs text-lilac-500 mt-0.5">We'll nudge you once if you haven't studied yet</p>
+                    </div>
+                  </div>
+                  <input
+                    type="time"
+                    value={reminder.time}
+                    onChange={(e) => updateReminder({ ...reminder, time: e.target.value })}
+                    className="px-3 py-1.5 rounded-lg border border-powder-200 dark:border-jet-600 bg-white dark:bg-jet-800 text-jet dark:text-jet-100 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-forest/30 focus:border-forest transition-all"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      </section>
+
+      <section className="mb-8 animate-slide-up" style={{ animationDelay: '240ms' }}>
         <h2 className="text-xs font-semibold text-lilac uppercase tracking-wider mb-3">
           Activity Preferences
         </h2>
@@ -249,7 +297,7 @@ export default function SettingsPage() {
         </Card>
       </section>
 
-      <section className="mb-6 animate-slide-up" style={{ animationDelay: '320ms' }}>
+      <section className="mb-8 animate-slide-up" style={{ animationDelay: '320ms' }}>
         <h2 className="text-xs font-semibold text-lilac uppercase tracking-wider mb-3">
           Appearance
         </h2>
@@ -285,16 +333,31 @@ export default function SettingsPage() {
           Account
         </h2>
         <Card>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-jet">{user?.email}</p>
-              <p className="text-xs text-lilac-500 mt-0.5">Signed in</p>
+          {isGuest ? (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-jet">Guest Mode</p>
+                <p className="text-xs text-lilac-500 mt-0.5">Data saved locally only</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" onClick={() => setConfirmSignOut(true)}>
+                  <LogOut className="w-3.5 h-3.5" />
+                  Sign Out
+                </Button>
+              </div>
             </div>
-            <Button variant="secondary" size="sm" onClick={() => setConfirmSignOut(true)}>
-              <LogOut className="w-3.5 h-3.5" />
-              Sign Out
-            </Button>
-          </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-jet">{user?.email}</p>
+                <p className="text-xs text-lilac-500 mt-0.5">Signed in</p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => setConfirmSignOut(true)}>
+                <LogOut className="w-3.5 h-3.5" />
+                Sign Out
+              </Button>
+            </div>
+          )}
         </Card>
       </section>
 
@@ -316,7 +379,7 @@ export default function SettingsPage() {
       <ConfirmDialog
         open={confirmSignOut}
         title="Sign out?"
-        message="You'll need to sign back in to continue your study sessions."
+        message={isGuest ? 'Your local data will be cleared.' : "You'll need to sign back in to continue your study sessions."}
         confirmLabel="Sign Out"
         variant="danger"
         onConfirm={() => { setConfirmSignOut(false); signOut(); }}

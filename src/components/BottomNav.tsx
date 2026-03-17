@@ -1,6 +1,8 @@
 import { useRef, useEffect, useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Timer, Leaf, BarChart3, Settings } from 'lucide-react';
+import { useSession } from '../contexts/SessionContext';
+import ConfirmDialog from './ui/ConfirmDialog';
 
 const links = [
   { to: '/timer', label: 'Timer', icon: Timer },
@@ -11,8 +13,13 @@ const links = [
 
 export default function BottomNav() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { phase } = useSession();
   const navRef = useRef<HTMLDivElement>(null);
   const [pillStyle, setPillStyle] = useState({ left: 0, width: 0 });
+  const [pendingNav, setPendingNav] = useState<string | null>(null);
+
+  const isActiveSession = phase === 'working' || phase === 'breaking';
 
   useEffect(() => {
     const activeIndex = links.findIndex((l) =>
@@ -33,7 +40,7 @@ export default function BottomNav() {
     <nav aria-label="Main navigation" className="fixed bottom-0 inset-x-0 z-30 bg-white/90 dark:bg-jet-950/90 backdrop-blur-md border-t border-powder-200 dark:border-jet-700">
       <div
         ref={navRef}
-        className="max-w-lg mx-auto flex items-center justify-around h-16 px-2 relative"
+        className="max-w-lg mx-auto flex items-center justify-around h-[4.5rem] px-2 relative"
       >
         <div
           className="absolute top-2 h-10 rounded-xl bg-forest/15 transition-all duration-300 pointer-events-none"
@@ -45,8 +52,14 @@ export default function BottomNav() {
             key={to}
             to={to}
             aria-label={label}
+            onClick={(e) => {
+              if (isActiveSession && to !== '/timer') {
+                e.preventDefault();
+                setPendingNav(to);
+              }
+            }}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 relative z-10 active:scale-95 ${
+              `flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl transition-all duration-200 relative z-10 active:scale-95 ${
                 isActive
                   ? 'text-forest'
                   : 'text-lilac-400 hover:text-jet-600'
@@ -76,6 +89,20 @@ export default function BottomNav() {
         ))}
       </div>
       <div className="h-[env(safe-area-inset-bottom)]" />
+
+      <ConfirmDialog
+        open={!!pendingNav}
+        title="Leave active session?"
+        message="Your timer is still running. You can come back anytime."
+        confirmLabel="Leave"
+        cancelLabel="Stay"
+        onConfirm={() => {
+          const target = pendingNav;
+          setPendingNav(null);
+          if (target) navigate(target);
+        }}
+        onCancel={() => setPendingNav(null)}
+      />
     </nav>
   );
 }

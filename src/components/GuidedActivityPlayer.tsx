@@ -119,11 +119,16 @@ export default function GuidedActivityPlayer() {
                 ? 'text-forest hover:bg-forest-50 dark:hover:bg-forest-950/20'
                 : 'text-lilac-400 hover:bg-powder-50 dark:hover:bg-jet-700'
             }`}
-            title={voiceEnabled ? 'Mute voice guidance' : 'Enable voice guidance'}
+            aria-label={voiceEnabled ? 'Mute voice guidance' : 'Enable voice guidance'}
+            aria-pressed={voiceEnabled}
           >
             {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
         )}
+      </div>
+
+      <div className="sr-only" aria-live="assertive" aria-atomic="true">
+        Step {stepIndex + 1} of {totalSteps}: {currentStep.instruction}
       </div>
 
       <div className="max-w-sm w-full text-center">
@@ -173,6 +178,7 @@ export default function GuidedActivityPlayer() {
               fillColor={catStyles.hex}
               glowing
               showDot={false}
+              ariaLabel="Activity step progress"
             >
               <p className="text-2xl font-bold text-jet tabular-nums">
                 {stepTimeLeft}s

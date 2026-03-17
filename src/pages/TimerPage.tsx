@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Play, Pause, SkipForward, Square, Leaf } from 'lucide-react';
+import { Play, Pause, SkipForward, Square, Leaf, Clock } from 'lucide-react';
 import ProgressRing from '../components/ui/ProgressRing';
 import AnimatedDigits from '../components/ui/AnimatedDigits';
 import Button from '../components/ui/Button';
@@ -65,6 +65,8 @@ export default function TimerPage() {
           strokeWidth={10}
           fillColor={isRunning ? '#2E6F40' : isPaused ? '#A39BA8' : '#B8C5D6'}
           glowing={isRunning}
+          showDot={false}
+          ariaLabel="Work session progress"
         >
           <div className="text-center">
             <AnimatedDigits
@@ -124,9 +126,12 @@ export default function TimerPage() {
         const isLongBreak = sessionNumber % settings.sessions_before_long_break === 0;
         const breakMinutes = isLongBreak ? settings.long_break_minutes : settings.short_break_minutes;
         return (
-          <p className="text-xs text-lilac-500 mb-4">
-            Next break: {breakMinutes} min {isLongBreak ? '(long)' : '(short)'}
-          </p>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-powder-50 dark:bg-jet-800 border border-powder-200 dark:border-jet-700 mb-4">
+            <Clock className="w-3 h-3 text-lilac-500" />
+            <span className="text-xs text-jet-600 dark:text-jet-300 font-medium">
+              Next break: {breakMinutes} min {isLongBreak ? '(long)' : '(short)'}
+            </span>
+          </div>
         );
       })()}
 

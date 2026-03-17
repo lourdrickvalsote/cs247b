@@ -59,6 +59,8 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number)
 
   return (
     <div
+      role="alert"
+      aria-live="assertive"
       className={`relative overflow-hidden flex items-start gap-3 p-3 rounded-xl border shadow-lg backdrop-blur-sm transition-all duration-200 ${bgColor} ${
         visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
       }`}

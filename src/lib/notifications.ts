@@ -10,8 +10,8 @@ export function sendNotification(title: string, body: string) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   new Notification(title, {
     body,
-    icon: '/vite.svg',
-    badge: '/vite.svg',
+    icon: '/logo.png',
+    badge: '/logo.png',
   });
 }
 

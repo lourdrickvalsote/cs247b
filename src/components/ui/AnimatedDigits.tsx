@@ -69,10 +69,15 @@ export default function AnimatedDigits({
   const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 
   return (
-    <span className={`inline-flex tabular-nums ${className}`}>
-      {timeStr.split('').map((ch, i) => (
-        <Digit key={i} char={ch} animating={running} />
-      ))}
-    </span>
+    <>
+      <span className="sr-only" role="timer" aria-atomic="true">
+        {mins} minute{mins !== 1 ? 's' : ''} {secs} second{secs !== 1 ? 's' : ''}
+      </span>
+      <span className={`inline-flex tabular-nums ${className}`} aria-hidden="true">
+        {timeStr.split('').map((ch, i) => (
+          <Digit key={i} char={ch} animating={running} />
+        ))}
+      </span>
+    </>
   );
 }

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Sparkles, ArrowLeft } from 'lucide-react';
 import Button from './ui/Button';
 import { useSession } from '../contexts/SessionContext';
 
@@ -16,6 +16,11 @@ export default function RestorationRating() {
   const [step, setStep] = useState<1 | 2>(1);
   const [tookBreak, setTookBreak] = useState<boolean | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    containerRef.current?.focus();
+  }, [step]);
 
   const handleTookBreak = (value: boolean) => {
     setTookBreak(value);
@@ -24,7 +29,7 @@ export default function RestorationRating() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-5rem)] px-6">
-      <div className="max-w-sm w-full text-center">
+      <div ref={containerRef} tabIndex={-1} className="max-w-sm w-full text-center outline-none">
         <div className="w-16 h-16 bg-forest-50 rounded-2xl flex items-center justify-center mx-auto mb-5 animate-bounce-in">
           <Sparkles className="w-8 h-8 text-forest" />
         </div>
@@ -69,6 +74,14 @@ export default function RestorationRating() {
 
         {step === 2 && (
           <>
+            <button
+              onClick={() => { setStep(1); setSelected(null); }}
+              aria-label="Go back"
+              className="flex items-center gap-1 text-sm text-lilac-600 hover:text-jet dark:hover:text-jet-100 font-medium mb-4 mx-auto transition-colors group"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" />
+              Back
+            </button>
             <h1
               className="text-2xl font-bold text-jet dark:text-jet-100 mb-1 animate-slide-up"
             >
@@ -81,13 +94,15 @@ export default function RestorationRating() {
               Rate how your break went
             </p>
 
-            <div className="flex items-start justify-center gap-3 mb-8">
+            <div className="flex items-start justify-center gap-3 mb-8" role="group" aria-label="Restoration rating">
               {RATINGS.map((r, i) => {
                 const isSelected = selected === r.value;
                 return (
                   <button
                     key={r.value}
                     onClick={() => setSelected(r.value)}
+                    aria-label={`Rate ${r.value} out of 5, ${r.label}`}
+                    aria-pressed={isSelected}
                     className="flex flex-col items-center gap-1.5 animate-scale-in"
                     style={{ animationDelay: `${200 + i * 80}ms` }}
                   >
@@ -111,6 +126,16 @@ export default function RestorationRating() {
                 );
               })}
             </div>
+
+            {selected !== null && (
+              <p className="text-xs text-forest font-medium mb-4 animate-fade-in">
+                {selected >= 4
+                  ? 'Feeling restored — great break choice!'
+                  : selected >= 3
+                    ? 'Every break counts. Keep it up!'
+                    : 'Try a different activity next time for better restoration.'}
+              </p>
+            )}
 
             <div
               className="space-y-3 animate-slide-up"

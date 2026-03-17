@@ -11,6 +11,7 @@ interface UseTimerOptions {
 export function useTimer({ initialSeconds, onComplete, onTick }: UseTimerOptions) {
   const [remaining, setRemaining] = useState(initialSeconds);
   const [status, setStatus] = useState<TimerStatus>('idle');
+  const [totalForRun, setTotalForRun] = useState(initialSeconds);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const endTimeRef = useRef<number>(0);
   const onCompleteRef = useRef(onComplete);
@@ -31,6 +32,7 @@ export function useTimer({ initialSeconds, onComplete, onTick }: UseTimerOptions
   const startInterval = useCallback((seconds: number) => {
     clearTimer();
     setRemaining(seconds);
+    setTotalForRun(seconds);
     remainingRef.current = seconds;
     endTimeRef.current = Date.now() + seconds * 1000;
     setStatus('running');
@@ -76,12 +78,14 @@ export function useTimer({ initialSeconds, onComplete, onTick }: UseTimerOptions
   const extend = useCallback((additionalSeconds: number) => {
     if (status === 'running') {
       endTimeRef.current += additionalSeconds * 1000;
+      setTotalForRun((prev) => prev + additionalSeconds);
       setRemaining((prev) => {
         const next = prev + additionalSeconds;
         remainingRef.current = next;
         return next;
       });
     } else if (status === 'paused') {
+      setTotalForRun((prev) => prev + additionalSeconds);
       setRemaining((prev) => {
         const next = prev + additionalSeconds;
         remainingRef.current = next;
@@ -115,8 +119,8 @@ export function useTimer({ initialSeconds, onComplete, onTick }: UseTimerOptions
     return clearTimer;
   }, [clearTimer]);
 
-  const elapsed = initialSeconds - remaining;
-  const progress = initialSeconds > 0 ? elapsed / initialSeconds : 0;
+  const elapsed = totalForRun - remaining;
+  const progress = totalForRun > 0 ? elapsed / totalForRun : 0;
 
   return {
     remaining,

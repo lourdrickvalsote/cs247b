@@ -10,6 +10,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import AppLayout from './components/AppLayout';
 import { Loader2 } from 'lucide-react';
 import { useSyncPending } from './hooks/useSyncPending';
+import { useStudyReminder } from './hooks/useStudyReminder';
 
 const WelcomePage = lazy(() => import('./pages/WelcomePage'));
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
@@ -27,6 +28,7 @@ const PageFallback = () => (
 function AppRoutes() {
   const { user, profile, loading } = useAuth();
   useSyncPending();
+  useStudyReminder();
 
   if (loading) {
     return (

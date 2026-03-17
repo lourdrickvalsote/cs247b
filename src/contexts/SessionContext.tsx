@@ -3,6 +3,7 @@ import { useTimer, type TimerStatus } from '../hooks/useTimer';
 import { useSettings } from '../hooks/useSettings';
 import { useSessionHistory } from '../hooks/useSessionHistory';
 import { sendNotification, playChime } from '../lib/notifications';
+import { markStudiedToday } from '../lib/reminders';
 import type { Session, SessionType, BreakActivity } from '../types/database';
 
 type SessionPhase = 'idle' | 'working' | 'break_alert' | 'breaking' | 'rating' | 'session_complete';
@@ -86,6 +87,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<SessionPhase>('idle');
   const [sessionNumber, setSessionNumber] = useState(1);
   const [totalPlannedSessions, setTotalPlannedSessions] = useState(settings.sessions_before_long_break);
+
+  // Keep totalPlannedSessions in sync with settings while idle
+  useEffect(() => {
+    if (phase === 'idle') {
+      setTotalPlannedSessions(settings.sessions_before_long_break);
+    }
+  }, [settings.sessions_before_long_break, phase]);
+
   const [currentType, setCurrentType] = useState<SessionType>('work');
   const [currentActivity, setCurrentActivity] = useState<BreakActivity | null>(null);
   const sessionStartRef = useRef<Date>(new Date());
@@ -120,6 +129,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     accumulatedWorkSecsRef.current += getWorkSeconds();
     roundsCompletedRef.current += 1;
+    markStudiedToday();
 
     const checkin = preWorkCheckinRef.current;
     preWorkCheckinRef.current = null;

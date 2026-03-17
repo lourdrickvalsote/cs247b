@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Leaf, Clock, ChevronRight } from 'lucide-react';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
@@ -19,16 +19,17 @@ export default function BreakAlert() {
   const { activities, favorites, loading } = useActivities();
   const [showPicker, setShowPicker] = useState(false);
 
-  const isLongBreak = sessionNumber % totalPlannedSessions === 0;
+  const isLongBreak = sessionNumber % settings.sessions_before_long_break === 0;
   const breakMinutes = isLongBreak ? settings.long_break_minutes : settings.short_break_minutes;
 
-  // Build curated picks: 1 activity per category, preferring favorites
+  // Build curated picks: 1 activity per enabled category, preferring favorites
+  const hiddenCategories = settings.hidden_categories ?? [];
   const curatedPicks = useMemo<BreakActivity[]>(() => {
     if (loading) return [];
     const picks: BreakActivity[] = [];
     const pool = activities.length > 0 ? activities : [];
 
-    for (const cat of CATEGORY_ORDER) {
+    for (const cat of CATEGORY_ORDER.filter((c) => !hiddenCategories.includes(c))) {
       // Try favorites first for this category
       const fav = favorites.find((a) => a.category === cat);
       if (fav) {
@@ -40,7 +41,7 @@ export default function BreakAlert() {
       if (fallback) picks.push(fallback);
     }
     return picks;
-  }, [activities, favorites, loading]);
+  }, [activities, favorites, loading, hiddenCategories]);
 
   // Auto-suggest top pick: prefer favorites, then rotate
   const suggested = useMemo<BreakActivity | null>(() => {
@@ -50,6 +51,11 @@ export default function BreakAlert() {
 
   const [selectedActivity, setSelectedActivity] = useState<BreakActivity | null>(null);
   const activity = selectedActivity ?? suggested;
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    containerRef.current?.focus();
+  }, []);
 
   if (showPicker) {
     return (
@@ -67,7 +73,13 @@ export default function BreakAlert() {
   const otherPicks = curatedPicks.filter((a) => a.id !== activity?.id);
 
   return (
-    <div className={`fixed inset-0 z-40 bg-gradient-to-b ${isLongBreak ? 'from-alice via-forest-50/30 to-alice dark:from-jet-950 dark:via-forest-950/15 dark:to-jet-950' : 'from-alice via-powder-50/20 to-alice dark:from-jet-950 dark:via-powder-950/10 dark:to-jet-950'} flex flex-col items-center justify-center px-6 overflow-y-auto`}>
+    <div
+      ref={containerRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Break time - choose an activity"
+      tabIndex={-1}
+      className={`fixed inset-0 z-40 bg-gradient-to-b ${isLongBreak ? 'from-alice via-forest-50/30 to-alice dark:from-jet-950 dark:via-forest-950/15 dark:to-jet-950' : 'from-alice via-powder-50/20 to-alice dark:from-jet-950 dark:via-powder-950/10 dark:to-jet-950'} flex flex-col items-center justify-center px-6 overflow-y-auto outline-none`}>
       <div className="absolute inset-0 bg-jet/5 animate-fade-in" />
       <div aria-hidden="true">
         <div className={`absolute top-[15%] left-[10%] w-12 h-12 rounded-full ${isLongBreak ? 'bg-forest/10 dark:bg-forest/5' : 'bg-powder/20 dark:bg-powder/10'} animate-float-slow`} />

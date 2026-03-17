@@ -1,15 +1,32 @@
+import { useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Clock, Coffee, Target, ArrowRight, BarChart3 } from 'lucide-react';
 import Button from './ui/Button';
 import Card from './ui/Card';
 import AnimatedCounter from './ui/AnimatedCounter';
 import { useSession } from '../contexts/SessionContext';
+import { useSessionHistory } from '../hooks/useSessionHistory';
 import { formatMinutes } from '../lib/format';
+import { playChime } from '../lib/notifications';
 
 export default function SessionComplete() {
   const navigate = useNavigate();
   const { resetAll, sessionNumber, totalPlannedSessions, completedStats, continueStudying, startNextRound } = useSession();
+  const { todayCompletedSessions } = useSessionHistory();
   const allSessionsDone = completedStats?.allDone ?? false;
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    headingRef.current?.focus();
+    if (allSessionsDone) playChime();
+  }, [allSessionsDone]);
+
+  const milestoneMessage = (() => {
+    if (todayCompletedSessions >= 10) return "10+ sessions today — you're unstoppable!";
+    if (todayCompletedSessions >= 5) return '5 sessions done today — incredible focus!';
+    if (todayCompletedSessions >= 3) return '3 sessions today, great momentum!';
+    return null;
+  })();
 
   const workMins = completedStats ? formatMinutes(completedStats.totalWorkSeconds) : '0m';
   const breakMins = completedStats ? formatMinutes(completedStats.totalBreakSeconds) : '0m';
@@ -69,7 +86,9 @@ export default function SessionComplete() {
           </div>
 
           <h1
-            className="text-2xl font-bold text-jet mb-1 animate-slide-up"
+            ref={headingRef}
+            tabIndex={-1}
+            className="text-2xl font-bold text-jet mb-1 animate-slide-up outline-none"
             style={{ animationDelay: '200ms' }}
           >
             Session complete!
@@ -80,6 +99,14 @@ export default function SessionComplete() {
           >
             Great work! You finished all {totalPlannedSessions} rounds.
           </p>
+          {milestoneMessage && (
+            <p
+              className="text-xs font-semibold text-forest bg-forest-50 dark:bg-forest-950/30 rounded-full px-3 py-1 inline-block mb-2 animate-bounce-in"
+              style={{ animationDelay: '350ms' }}
+            >
+              {milestoneMessage}
+            </p>
+          )}
           {timeRange && (
             <p
               className="text-xs text-lilac-400 mb-8 animate-fade-in"
@@ -183,7 +210,9 @@ export default function SessionComplete() {
         </div>
 
         <h1
-          className="text-2xl font-bold text-jet mb-1 animate-slide-up"
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-2xl font-bold text-jet mb-1 animate-slide-up outline-none"
           style={{ animationDelay: '200ms' }}
         >
           Break complete!

@@ -27,11 +27,11 @@ export default function BreakMode() {
 
   return (
     <div className="relative flex flex-col items-center justify-center min-h-[calc(100vh-5rem)] px-6 animate-fade-in">
-      <div className="break-ambient-orb absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-breathe" aria-hidden="true" />
-      <div aria-hidden="true">
-        <div className="absolute top-[18%] left-[15%] w-8 h-8 rounded-full bg-powder/15 dark:bg-powder/8 animate-float-slow" />
-        <div className="absolute top-[30%] right-[10%] w-6 h-6 rounded-full bg-lilac/12 dark:bg-lilac/6 animate-float-slow" style={{ animationDelay: '3s' }} />
-        <div className="absolute bottom-[25%] left-[20%] w-5 h-5 rounded-full bg-powder/10 dark:bg-powder/5 animate-float-slow" style={{ animationDelay: '5s' }} />
+      <div className={`transition-opacity duration-500 ${isPaused ? 'opacity-20' : 'opacity-100'}`} aria-hidden="true">
+        <div className="break-ambient-orb absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-breathe" />
+      </div>
+      <div className="sr-only" aria-live="polite">
+        {isPaused ? 'Break paused' : 'Break in progress'}
       </div>
       <div className="relative mb-10 animate-scale-in z-10">
         <ProgressRing
@@ -40,6 +40,7 @@ export default function BreakMode() {
           strokeWidth={10}
           fillColor="#B8C5D6"
           glowing={isRunning}
+          ariaLabel="Break timer progress"
         >
           <div className="text-center">
             <AnimatedDigits

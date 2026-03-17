@@ -7,18 +7,30 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  isGuest: boolean;
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signInAsGuest: () => void;
   signOut: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const GUEST_USER = { id: 'guest', email: '' } as unknown as User;
+const GUEST_PROFILE: Profile = {
+  id: 'guest',
+  display_name: 'Guest',
+  has_onboarded: true,
+  created_at: '',
+  updated_at: '',
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isGuest, setIsGuest] = useState(false);
 
   const fetchProfile = async (userId: string) => {
     const { data } = await supabase
@@ -36,6 +48,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let initialLoad = true;
+
+    // Restore guest mode on reload before Supabase check
+    if (localStorage.getItem('brevi_guest_mode') === 'true') {
+      setUser(GUEST_USER);
+      setProfile(GUEST_PROFILE);
+      setIsGuest(true);
+      setLoading(false);
+      return;
+    }
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const currentUser = session?.user ?? null;
@@ -103,7 +124,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
+  const signInAsGuest = () => {
+    localStorage.setItem('brevi_guest_mode', 'true');
+    setUser(GUEST_USER);
+    setProfile(GUEST_PROFILE);
+    setIsGuest(true);
+  };
+
   const signOut = async () => {
+    if (isGuest) {
+      localStorage.removeItem('brevi_guest_mode');
+      setUser(null);
+      setProfile(null);
+      setIsGuest(false);
+      return;
+    }
     await supabase.auth.signOut();
   };
 
@@ -114,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signUp, signIn, signOut, completeOnboarding }}>
+    <AuthContext.Provider value={{ user, profile, loading, isGuest, signUp, signIn, signInAsGuest, signOut, completeOnboarding }}>
       {children}
     </AuthContext.Provider>
   );
