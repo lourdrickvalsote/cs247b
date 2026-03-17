@@ -12,7 +12,6 @@ import { formatMinutes } from '../lib/format';
 import BreakAlert from '../components/BreakAlert';
 import BreakMode from '../components/BreakMode';
 import RestorationRating from '../components/RestorationRating';
-import PreWorkCheckin from '../components/PreWorkCheckin';
 import SessionComplete from '../components/SessionComplete';
 
 export default function TimerPage() {
@@ -37,7 +36,6 @@ export default function TimerPage() {
   if (phase === 'break_alert') return <BreakAlert />;
   if (phase === 'breaking') return <BreakMode />;
   if (phase === 'rating') return <RestorationRating />;
-  if (phase === 'pre_work_checkin') return <PreWorkCheckin />;
   if (phase === 'session_complete') return <SessionComplete />;
 
   const isIdle = phase === 'idle';

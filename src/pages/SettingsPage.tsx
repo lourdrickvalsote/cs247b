@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { LogOut, Minus, Plus, Sun, Moon, Monitor, StretchHorizontal, Wind, Brain, Footprints, Eye, Save } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -21,6 +21,16 @@ export default function SettingsPage() {
 
   // Local draft — all edits go here, not to the hook
   const [draft, setDraft] = useState<Omit<UserSettings, 'id' | 'user_id'> | null>(null);
+
+  // Voice guidance — localStorage only (not in Supabase)
+  const [voiceEnabled, setVoiceEnabled] = useState(() => {
+    const stored = localStorage.getItem('brevi_voice_guidance');
+    return stored !== null ? stored === 'true' : true;
+  });
+  const toggleVoice = useCallback((v: boolean) => {
+    setVoiceEnabled(v);
+    localStorage.setItem('brevi_voice_guidance', String(v));
+  }, []);
 
   // Sync draft from settings when settings first load (or reset after save)
   useEffect(() => {
@@ -176,6 +186,13 @@ export default function SettingsPage() {
                 }
                 updateDraft('notification_enabled', v);
               }}
+            />
+            <div className="border-t border-powder-100 dark:border-jet-700" />
+            <ToggleSetting
+              label="Voice guidance"
+              description="Read activity instructions aloud during guided breaks"
+              value={voiceEnabled}
+              onChange={toggleVoice}
             />
           </div>
         </Card>

@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/ui/Toast';
 import { useSettings } from './useSettings';
+import { useCustomActivities } from './useCustomActivities';
 import { cacheGet, cacheSet, queueWrite, CACHE_KEYS } from '../lib/fallbackStorage';
 import type { BreakActivity, UserActivityPreference, ActivityCategory } from '../types/database';
 
@@ -10,10 +11,17 @@ export function useActivities() {
   const { user } = useAuth();
   const { settings } = useSettings();
   const { showToast } = useToast();
-  const [activities, setActivities] = useState<BreakActivity[]>([]);
+  const { customActivities, createActivity, updateActivity, deleteActivity, isCustomActivity } =
+    useCustomActivities();
+  const [defaultActivities, setDefaultActivities] = useState<BreakActivity[]>([]);
   const [preferences, setPreferences] = useState<UserActivityPreference[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<ActivityCategory | 'all'>('all');
+
+  const activities = useMemo(
+    () => [...defaultActivities, ...customActivities],
+    [defaultActivities, customActivities],
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -31,7 +39,7 @@ export function useActivities() {
         if (prefsRes.error) throw prefsRes.error;
 
         if (activitiesRes.data) {
-          setActivities(activitiesRes.data as BreakActivity[]);
+          setDefaultActivities(activitiesRes.data as BreakActivity[]);
           cacheSet(CACHE_KEYS.activities, activitiesRes.data);
         }
         if (prefsRes.data) {
@@ -42,7 +50,7 @@ export function useActivities() {
         // Fallback to localStorage cache
         const cachedActivities = cacheGet<BreakActivity[]>(CACHE_KEYS.activities);
         const cachedPrefs = cacheGet<UserActivityPreference[]>(prefsKey);
-        if (cachedActivities) setActivities(cachedActivities);
+        if (cachedActivities) setDefaultActivities(cachedActivities);
         if (cachedPrefs) setPreferences(cachedPrefs);
         if (!cachedActivities) showToast('Failed to load activities.');
       } finally {
@@ -151,11 +159,16 @@ export function useActivities() {
 
   return {
     activities: filteredActivities,
+    allActivities: activities,
     favorites,
     loading,
     activeCategory,
     setActiveCategory,
     getPreference,
     toggleFavorite,
+    createActivity,
+    updateActivity,
+    deleteActivity,
+    isCustomActivity,
   };
 }

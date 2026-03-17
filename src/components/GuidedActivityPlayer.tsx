@@ -1,23 +1,29 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowLeft, Volume2, VolumeX } from 'lucide-react';
 import ProgressRing from './ui/ProgressRing';
 import Button from './ui/Button';
 import IconButton from './ui/IconButton';
 import { useSession } from '../contexts/SessionContext';
 import { formatTime, getCategoryStyles } from '../lib/format';
 import { getActivityIcon } from '../lib/icons';
+import { speak, stop as stopSpeech, isSpeechSupported } from '../lib/speech';
 
 export default function GuidedActivityPlayer() {
-  const { currentActivity, timerRemaining, endBreakEarly, cancelActivity } = useSession();
+  const { currentActivity, timerRemaining, endBreakEarly, returnToBreakAlert } = useSession();
   const [stepIndex, setStepIndex] = useState(0);
   const [stepTimeLeft, setStepTimeLeft] = useState(0);
   const [stepKey, setStepKey] = useState(0);
+  const [voiceEnabled, setVoiceEnabled] = useState(() => {
+    const stored = localStorage.getItem('brevi_voice_guidance');
+    return stored !== null ? stored === 'true' : true;
+  });
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const steps = currentActivity?.instructions ?? [];
   const currentStep = steps[stepIndex];
   const totalSteps = steps.length;
   const isBreathing = currentActivity?.category === 'breathing';
+  const speechSupported = isSpeechSupported();
 
   const clearStepTimer = useCallback(() => {
     if (intervalRef.current) {
@@ -48,13 +54,34 @@ export default function GuidedActivityPlayer() {
     [clearStepTimer, totalSteps],
   );
 
+  // Speak current instruction when step changes
   useEffect(() => {
     if (currentStep) {
       startStepTimer(currentStep.duration_seconds);
       setStepKey((k) => k + 1);
+
+      if (voiceEnabled && speechSupported) {
+        speak(currentStep.instruction);
+      }
     }
-    return clearStepTimer;
-  }, [stepIndex, currentStep, startStepTimer, clearStepTimer]);
+    return () => {
+      clearStepTimer();
+      stopSpeech();
+    };
+  }, [stepIndex, currentStep, startStepTimer, clearStepTimer, voiceEnabled, speechSupported]);
+
+  // Stop speech on unmount
+  useEffect(() => {
+    return () => stopSpeech();
+  }, []);
+
+  const toggleVoice = () => {
+    const next = !voiceEnabled;
+    setVoiceEnabled(next);
+    localStorage.setItem('brevi_voice_guidance', String(next));
+    if (!next) stopSpeech();
+    else if (currentStep) speak(currentStep.instruction);
+  };
 
   const goNext = () => {
     if (stepIndex < totalSteps - 1) setStepIndex((i) => i + 1);
@@ -74,13 +101,30 @@ export default function GuidedActivityPlayer() {
 
   return (
     <div className="fixed inset-0 z-40 bg-gradient-to-b from-alice via-white to-alice dark:from-jet-950 dark:via-jet-900 dark:to-jet-950 flex flex-col items-center justify-center px-6 animate-fade-in">
-      <button
-        onClick={cancelActivity}
-        className="absolute top-6 left-5 flex items-center gap-1.5 text-sm text-lilac-600 hover:text-jet font-medium transition-colors group z-10"
-      >
-        <ArrowLeft className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-1" />
-        Back
-      </button>
+      {/* Top bar: back + voice toggle */}
+      <div className="absolute top-6 left-5 right-5 flex items-center justify-between z-10">
+        <button
+          onClick={() => { stopSpeech(); returnToBreakAlert(); }}
+          className="flex items-center gap-1.5 text-sm text-lilac-600 hover:text-jet font-medium transition-colors group"
+        >
+          <ArrowLeft className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-1" />
+          Change activity
+        </button>
+
+        {speechSupported && (
+          <button
+            onClick={toggleVoice}
+            className={`p-2 rounded-lg transition-colors ${
+              voiceEnabled
+                ? 'text-forest hover:bg-forest-50 dark:hover:bg-forest-950/20'
+                : 'text-lilac-400 hover:bg-powder-50 dark:hover:bg-jet-700'
+            }`}
+            title={voiceEnabled ? 'Mute voice guidance' : 'Enable voice guidance'}
+          >
+            {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+        )}
+      </div>
 
       <div className="max-w-sm w-full text-center">
         <div className="flex items-center justify-center gap-2 mb-2 animate-slide-down">
@@ -167,11 +211,11 @@ export default function GuidedActivityPlayer() {
         </div>
 
         {stepIndex === totalSteps - 1 ? (
-          <Button size="sm" onClick={endBreakEarly}>
+          <Button size="sm" onClick={() => { stopSpeech(); endBreakEarly(); }}>
             Finish Break
           </Button>
         ) : (
-          <Button variant="ghost" size="sm" onClick={endBreakEarly}>
+          <Button variant="ghost" size="sm" onClick={() => { stopSpeech(); endBreakEarly(); }}>
             Skip break and focus
           </Button>
         )}

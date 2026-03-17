@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { Heart, Clock, Leaf, StretchHorizontal, Wind, ScanLine, Footprints, Eye, Layers } from 'lucide-react';
+import { Heart, Clock, Leaf, StretchHorizontal, Wind, ScanLine, Footprints, Eye, Layers, Plus, Pencil, Trash2 } from 'lucide-react';
 import Badge from '../components/ui/Badge';
+import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import CreateActivityModal from '../components/CreateActivityModal';
 import { useActivities } from '../hooks/useActivities';
 import { getCategoryLabel, getCategoryStyles } from '../lib/format';
 import { getActivityIcon } from '../lib/icons';
@@ -22,10 +25,24 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
 };
 
 export default function ActivitiesPage() {
-  const { activities, favorites, loading, activeCategory, setActiveCategory, getPreference, toggleFavorite } =
-    useActivities();
+  const {
+    activities, favorites, loading, activeCategory, setActiveCategory,
+    getPreference, toggleFavorite, createActivity, updateActivity, deleteActivity, isCustomActivity,
+  } = useActivities();
   const [selectedActivity, setSelectedActivity] = useState<BreakActivity | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<BreakActivity | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BreakActivity | null>(null);
   const { ref: dragRef, onPointerDown, onPointerMove, onPointerUp, onClickCapture } = useDragScroll<HTMLDivElement>();
+
+  const customActivities = activities.filter((a) => !a.is_default);
+
+  const handleDelete = () => {
+    if (!deleteTarget) return;
+    deleteActivity(deleteTarget.id);
+    setDeleteTarget(null);
+    setSelectedActivity(null);
+  };
 
   if (loading) {
     return (
@@ -48,7 +65,16 @@ export default function ActivitiesPage() {
 
   return (
     <div className="max-w-lg mx-auto px-5 py-6 pb-24 animate-fade-in">
-      <h1 className="text-2xl font-bold text-jet mb-1">Break Activities</h1>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-2xl font-bold text-jet">Break Activities</h1>
+        <button
+          onClick={() => setCreateOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-forest hover:bg-forest-700 transition-all duration-200 active:scale-95 shadow-sm"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Create
+        </button>
+      </div>
       <p className="text-sm text-lilac-600 mb-5">
         Browse and save your favorite restorative activities.
       </p>
@@ -109,11 +135,40 @@ export default function ActivitiesPage() {
                 <ActivityRow
                   activity={a}
                   isFavorited
+                  isCustom={isCustomActivity(a.id)}
                   onSelect={() => setSelectedActivity(a)}
                   onToggleFav={() => toggleFavorite(a.id)}
                 />
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {customActivities.length > 0 && activeCategory === 'all' && (
+        <div className="mb-6">
+          <h3 className="text-xs font-semibold text-lilac uppercase tracking-wider mb-3">
+            Your Activities
+          </h3>
+          <div className="space-y-2">
+            {customActivities.map((a, i) => {
+              const pref = getPreference(a.id);
+              return (
+                <div
+                  key={`custom-${a.id}`}
+                  className="animate-slide-up"
+                  style={{ animationDelay: `${i * 40}ms` }}
+                >
+                  <ActivityRow
+                    activity={a}
+                    isFavorited={!!pref?.is_favorited}
+                    isCustom
+                    onSelect={() => setSelectedActivity(a)}
+                    onToggleFav={() => toggleFavorite(a.id)}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -133,6 +188,7 @@ export default function ActivitiesPage() {
               <ActivityRow
                 activity={a}
                 isFavorited={!!pref?.is_favorited}
+                isCustom={isCustomActivity(a.id)}
                 onSelect={() => setSelectedActivity(a)}
                 onToggleFav={() => toggleFavorite(a.id)}
               />
@@ -164,10 +220,41 @@ export default function ActivitiesPage() {
           <ActivityDetail
             activity={selectedActivity}
             isFavorited={!!getPreference(selectedActivity.id)?.is_favorited}
+            isCustom={isCustomActivity(selectedActivity.id)}
             onToggleFav={() => toggleFavorite(selectedActivity.id)}
+            onEdit={() => {
+              setEditingActivity(selectedActivity);
+              setSelectedActivity(null);
+            }}
+            onDelete={() => setDeleteTarget(selectedActivity)}
           />
         )}
       </Modal>
+
+      <CreateActivityModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSave={createActivity}
+      />
+
+      <CreateActivityModal
+        open={!!editingActivity}
+        onClose={() => setEditingActivity(null)}
+        activity={editingActivity}
+        onSave={(data) => {
+          if (editingActivity) updateActivity(editingActivity.id, data);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Activity"
+        message={`Are you sure you want to delete "${deleteTarget?.title}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
@@ -175,11 +262,13 @@ export default function ActivitiesPage() {
 function ActivityRow({
   activity,
   isFavorited,
+  isCustom,
   onSelect,
   onToggleFav,
 }: {
   activity: BreakActivity;
   isFavorited: boolean;
+  isCustom: boolean;
   onSelect: () => void;
   onToggleFav: () => void;
 }) {
@@ -201,7 +290,14 @@ function ActivityRow({
           <Icon className={`w-5 h-5 ${styles.text}`} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-jet truncate">{activity.title}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-semibold text-jet truncate">{activity.title}</p>
+            {isCustom && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-lilac-100 text-lilac-600 dark:bg-lilac-950/40 dark:text-lilac-400 shrink-0">
+                Custom
+              </span>
+            )}
+          </div>
           <p className="text-xs text-lilac-500 line-clamp-1 mt-0.5">{activity.description}</p>
           <div className="flex items-center gap-2 mt-0.5">
             <Badge variant={styles.badgeVariant as any}>{getCategoryLabel(activity.category)}</Badge>
@@ -226,7 +322,21 @@ function ActivityRow({
   );
 }
 
-function ActivityDetail({ activity, isFavorited, onToggleFav }: { activity: BreakActivity; isFavorited: boolean; onToggleFav: () => void }) {
+function ActivityDetail({
+  activity,
+  isFavorited,
+  isCustom,
+  onToggleFav,
+  onEdit,
+  onDelete,
+}: {
+  activity: BreakActivity;
+  isFavorited: boolean;
+  isCustom: boolean;
+  onToggleFav: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const [heartAnim, setHeartAnim] = useState(false);
   const Icon = getActivityIcon(activity.icon_name);
   const mins = Math.ceil(activity.duration_seconds / 60);
@@ -245,7 +355,14 @@ function ActivityDetail({ activity, isFavorited, onToggleFav }: { activity: Brea
           <Icon className={`w-5 h-5 ${styles.text}`} />
         </div>
         <div className="flex-1">
-          <Badge variant={styles.badgeVariant as any}>{getCategoryLabel(activity.category)}</Badge>
+          <div className="flex items-center gap-1.5">
+            <Badge variant={styles.badgeVariant as any}>{getCategoryLabel(activity.category)}</Badge>
+            {isCustom && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-lilac-100 text-lilac-600 dark:bg-lilac-950/40 dark:text-lilac-400">
+                Custom
+              </span>
+            )}
+          </div>
           <p className="flex items-center gap-1 text-xs text-lilac-500 mt-1">
             <Clock className="w-3 h-3" />
             {mins} minutes &middot; {activity.instructions.length} steps
@@ -286,14 +403,27 @@ function ActivityDetail({ activity, isFavorited, onToggleFav }: { activity: Brea
         ))}
       </div>
 
-      <div className="mt-6">
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${styles.bg} dark:bg-forest-950/30`}>
-          <Clock className={`w-4 h-4 ${styles.text} shrink-0`} />
-          <p className="text-xs text-forest-700 dark:text-forest-300 font-medium">
-            Activities can be started from the break alert screen when your work timer ends.
-          </p>
+      {isCustom ? (
+        <div className="flex gap-3 mt-6">
+          <Button variant="outline" size="sm" fullWidth onClick={onEdit}>
+            <Pencil className="w-3.5 h-3.5" />
+            Edit
+          </Button>
+          <Button variant="secondary" size="sm" fullWidth onClick={onDelete}>
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete
+          </Button>
         </div>
-      </div>
+      ) : (
+        <div className="mt-6">
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${styles.bg} dark:bg-forest-950/30`}>
+            <Clock className={`w-4 h-4 ${styles.text} shrink-0`} />
+            <p className="text-xs text-forest-700 dark:text-forest-300 font-medium">
+              Activities can be started from the break alert screen when your work timer ends.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

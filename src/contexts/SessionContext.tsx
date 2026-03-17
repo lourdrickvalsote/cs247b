@@ -5,7 +5,7 @@ import { useSessionHistory } from '../hooks/useSessionHistory';
 import { sendNotification, playChime } from '../lib/notifications';
 import type { Session, SessionType, BreakActivity } from '../types/database';
 
-type SessionPhase = 'idle' | 'working' | 'break_alert' | 'breaking' | 'rating' | 'pre_work_checkin' | 'session_complete';
+type SessionPhase = 'idle' | 'working' | 'break_alert' | 'breaking' | 'rating' | 'session_complete';
 
 const SESSION_STORAGE_KEY = 'brevi_active_session';
 
@@ -21,7 +21,7 @@ interface PersistedSession {
 }
 
 function saveToStorage(data: PersistedSession | null) {
-  if (data && data.phase !== 'idle' && data.phase !== 'session_complete' && data.phase !== 'break_alert' && data.phase !== 'rating' && data.phase !== 'pre_work_checkin') {
+  if (data && data.phase !== 'idle' && data.phase !== 'session_complete' && data.phase !== 'break_alert' && data.phase !== 'rating') {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
   } else {
     localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -71,11 +71,10 @@ interface SessionContextType {
   endSession: () => void;
   resetAll: () => void;
   cancelActivity: () => void;
+  returnToBreakAlert: () => void;
   continueStudying: () => void;
-  submitRestorationRating: (rating: number) => void;
-  skipRestorationRating: () => void;
-  submitPreWorkCheckin: (tookBreak: boolean, tiredness: number) => void;
-  skipPreWorkCheckin: () => void;
+  submitPostBreakCheckin: (tookBreak: boolean | null, rating: number) => void;
+  skipPostBreakCheckin: () => void;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
@@ -164,12 +163,37 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setPhase('rating');
   }, [settings, currentActivity, sessionNumber, totalPlannedSessions]);
 
-  const finishRating = useCallback((rating: number | null) => {
+  const workTimer = useTimer({
+    initialSeconds: getWorkSeconds(),
+    onComplete: handleWorkComplete,
+  });
+
+  const breakTimer = useTimer({
+    initialSeconds: getBreakSeconds(),
+    onComplete: handleBreakComplete,
+  });
+
+  const beginWork = useCallback(() => {
+    const workSecs = getWorkSeconds();
+    setPhase('working');
+    setCurrentType('work');
+    sessionStartRef.current = new Date();
+    workTimer.start(workSecs);
+  }, [workTimer, settings]);
+
+  const finishCheckin = useCallback((tookBreak: boolean | null, rating: number | null) => {
     const pending = pendingBreakSessionRef.current;
     if (!pending) return;
 
     saveSession({ ...pending, restoration_rating: rating });
     pendingBreakSessionRef.current = null;
+
+    // Store checkin data for the next work session
+    if (tookBreak !== null && rating !== null) {
+      preWorkCheckinRef.current = { tookBreak, tiredness: rating };
+    } else {
+      preWorkCheckinRef.current = null;
+    }
 
     const allDone = pendingAllDoneRef.current;
 
@@ -186,7 +210,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setPhase('session_complete');
     } else if (settings.auto_start_work) {
       setSessionNumber((n) => n + 1);
-      setPhase('pre_work_checkin');
+      beginWork();
     } else {
       setCompletedStats({
         roundsCompleted: roundsCompletedRef.current,
@@ -199,25 +223,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setSessionNumber((n) => n + 1);
       setPhase('session_complete');
     }
-  }, [settings, saveSession]);
+  }, [settings, saveSession, beginWork]);
 
-  const submitRestorationRating = useCallback((rating: number) => {
-    finishRating(rating);
-  }, [finishRating]);
+  const submitPostBreakCheckin = useCallback((tookBreak: boolean | null, rating: number) => {
+    finishCheckin(tookBreak, rating);
+  }, [finishCheckin]);
 
-  const skipRestorationRating = useCallback(() => {
-    finishRating(null);
-  }, [finishRating]);
-
-  const workTimer = useTimer({
-    initialSeconds: getWorkSeconds(),
-    onComplete: handleWorkComplete,
-  });
-
-  const breakTimer = useTimer({
-    initialSeconds: getBreakSeconds(),
-    onComplete: handleBreakComplete,
-  });
+  const skipPostBreakCheckin = useCallback(() => {
+    finishCheckin(null, null);
+  }, [finishCheckin]);
 
   const startWork = useCallback(() => {
     const workSecs = getWorkSeconds();
@@ -235,34 +249,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     workTimer.start(workSecs);
   }, [workTimer, settings]);
 
-  const beginWork = useCallback(() => {
-    const workSecs = getWorkSeconds();
-    setPhase('working');
-    setCurrentType('work');
-    sessionStartRef.current = new Date();
-    workTimer.start(workSecs);
-  }, [workTimer, settings]);
-
   const continueStudying = useCallback(() => {
     setTotalPlannedSessions((n) => n + settings.sessions_before_long_break);
     setCompletedStats(null);
-    setPhase('pre_work_checkin');
-  }, [settings]);
+    beginWork();
+  }, [settings, beginWork]);
 
   const startNextRound = useCallback(() => {
     setCompletedStats(null);
-    setPhase('pre_work_checkin');
-  }, []);
-
-  const submitPreWorkCheckin = useCallback((tookBreak: boolean, tiredness: number) => {
-    preWorkCheckinRef.current = { tookBreak, tiredness };
     beginWork();
   }, [beginWork]);
 
-  const skipPreWorkCheckin = useCallback(() => {
-    preWorkCheckinRef.current = null;
-    beginWork();
-  }, [beginWork]);
 
   const pauseTimer = useCallback(() => {
     if (phase === 'working') workTimer.pause();
@@ -363,6 +360,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setCurrentActivity(null);
     const left = breakTimer.remaining;
     breakTimer.start(left);
+  }, [breakTimer]);
+
+  const returnToBreakAlert = useCallback(() => {
+    breakTimer.reset();
+    setCurrentActivity(null);
+    setPhase('break_alert');
   }, [breakTimer]);
 
   const endSession = useCallback(() => {
@@ -511,11 +514,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         endSession,
         resetAll,
         cancelActivity,
+        returnToBreakAlert,
         continueStudying,
-        submitRestorationRating,
-        skipRestorationRating,
-        submitPreWorkCheckin,
-        skipPreWorkCheckin,
+        submitPostBreakCheckin,
+        skipPostBreakCheckin,
       }}
     >
       {children}

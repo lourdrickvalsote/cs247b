@@ -26,7 +26,7 @@ interface ActivityPickerProps {
 }
 
 export default function ActivityPicker({ onSelect, onBack }: ActivityPickerProps) {
-  const { activities, favorites, activeCategory, setActiveCategory, getPreference, toggleFavorite } =
+  const { activities, favorites, activeCategory, setActiveCategory, getPreference, toggleFavorite, isCustomActivity } =
     useActivities();
   const { ref: dragRef, onPointerDown, onPointerMove, onPointerUp, onClickCapture } = useDragScroll<HTMLDivElement>();
 
@@ -102,6 +102,7 @@ export default function ActivityPicker({ onSelect, onBack }: ActivityPickerProps
                   <ActivityCard
                     activity={a}
                     isFavorited
+                    isCustom={isCustomActivity(a.id)}
                     onSelect={() => onSelect(a)}
                     onToggleFav={() => toggleFavorite(a.id)}
                   />
@@ -123,6 +124,7 @@ export default function ActivityPicker({ onSelect, onBack }: ActivityPickerProps
                 <ActivityCard
                   activity={a}
                   isFavorited={!!pref?.is_favorited}
+                  isCustom={isCustomActivity(a.id)}
                   onSelect={() => onSelect(a)}
                   onToggleFav={() => toggleFavorite(a.id)}
                 />
@@ -138,11 +140,13 @@ export default function ActivityPicker({ onSelect, onBack }: ActivityPickerProps
 function ActivityCard({
   activity,
   isFavorited,
+  isCustom,
   onSelect,
   onToggleFav,
 }: {
   activity: BreakActivity;
   isFavorited: boolean;
+  isCustom: boolean;
   onSelect: () => void;
   onToggleFav: () => void;
 }) {
@@ -164,7 +168,14 @@ function ActivityCard({
           <Icon className={`w-5 h-5 ${styles.text}`} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-jet truncate">{activity.title}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-semibold text-jet truncate">{activity.title}</p>
+            {isCustom && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-lilac-100 text-lilac-600 dark:bg-lilac-950/40 dark:text-lilac-400 shrink-0">
+                Custom
+              </span>
+            )}
+          </div>
           <p className="text-xs text-lilac-500 line-clamp-1 mt-0.5">{activity.description}</p>
           <div className="flex items-center gap-2 mt-0.5">
             <Badge variant={styles.badgeVariant as any}>

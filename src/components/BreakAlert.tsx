@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Leaf, Clock, RefreshCw } from 'lucide-react';
+import { Leaf, Clock, ChevronRight } from 'lucide-react';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
 import Card from './ui/Card';
@@ -9,7 +9,9 @@ import { useActivities } from '../hooks/useActivities';
 import { getActivityIcon } from '../lib/icons';
 import { getCategoryLabel, getCategoryStyles } from '../lib/format';
 import ActivityPicker from './ActivityPicker';
-import type { BreakActivity } from '../types/database';
+import type { BreakActivity, ActivityCategory } from '../types/database';
+
+const CATEGORY_ORDER: ActivityCategory[] = ['stretching', 'breathing', 'mindfulness', 'movement', 'eye_rest'];
 
 export default function BreakAlert() {
   const { startBreak, extendWork, endSession, sessionNumber, totalPlannedSessions } = useSession();
@@ -20,17 +22,33 @@ export default function BreakAlert() {
   const isLongBreak = sessionNumber % totalPlannedSessions === 0;
   const breakMinutes = isLongBreak ? settings.long_break_minutes : settings.short_break_minutes;
 
-  // Auto-suggest an activity: prefer favorites, then rotate through all activities
+  // Build curated picks: 1 activity per category, preferring favorites
+  const curatedPicks = useMemo<BreakActivity[]>(() => {
+    if (loading) return [];
+    const picks: BreakActivity[] = [];
+    const pool = activities.length > 0 ? activities : [];
+
+    for (const cat of CATEGORY_ORDER) {
+      // Try favorites first for this category
+      const fav = favorites.find((a) => a.category === cat);
+      if (fav) {
+        picks.push(fav);
+        continue;
+      }
+      // Fall back to first available in this category
+      const fallback = pool.find((a) => a.category === cat);
+      if (fallback) picks.push(fallback);
+    }
+    return picks;
+  }, [activities, favorites, loading]);
+
+  // Auto-suggest top pick: prefer favorites, then rotate
   const suggested = useMemo<BreakActivity | null>(() => {
-    if (loading) return null;
-    const pool = favorites.length > 0 ? favorites : activities;
-    if (pool.length === 0) return null;
-    // Use sessionNumber to rotate through the pool for variety
-    return pool[(sessionNumber - 1) % pool.length];
-  }, [activities, favorites, loading, sessionNumber]);
+    if (curatedPicks.length === 0) return null;
+    return curatedPicks[(sessionNumber - 1) % curatedPicks.length];
+  }, [curatedPicks, sessionNumber]);
 
   const [selectedActivity, setSelectedActivity] = useState<BreakActivity | null>(null);
-  // Track whether user has explicitly interacted with selection
   const activity = selectedActivity ?? suggested;
 
   if (showPicker) {
@@ -45,8 +63,11 @@ export default function BreakAlert() {
     );
   }
 
+  // Other curated picks (excluding the currently selected one)
+  const otherPicks = curatedPicks.filter((a) => a.id !== activity?.id);
+
   return (
-    <div className={`fixed inset-0 z-40 bg-gradient-to-b ${isLongBreak ? 'from-alice via-forest-50/30 to-alice dark:from-jet-950 dark:via-forest-950/15 dark:to-jet-950' : 'from-alice via-powder-50/20 to-alice dark:from-jet-950 dark:via-powder-950/10 dark:to-jet-950'} flex flex-col items-center justify-center px-6`}>
+    <div className={`fixed inset-0 z-40 bg-gradient-to-b ${isLongBreak ? 'from-alice via-forest-50/30 to-alice dark:from-jet-950 dark:via-forest-950/15 dark:to-jet-950' : 'from-alice via-powder-50/20 to-alice dark:from-jet-950 dark:via-powder-950/10 dark:to-jet-950'} flex flex-col items-center justify-center px-6 overflow-y-auto`}>
       <div className="absolute inset-0 bg-jet/5 animate-fade-in" />
       <div aria-hidden="true">
         <div className={`absolute top-[15%] left-[10%] w-12 h-12 rounded-full ${isLongBreak ? 'bg-forest/10 dark:bg-forest/5' : 'bg-powder/20 dark:bg-powder/10'} animate-float-slow`} />
@@ -54,7 +75,7 @@ export default function BreakAlert() {
         <div className={`absolute bottom-[20%] left-[18%] w-10 h-10 rounded-full ${isLongBreak ? 'bg-lilac/15 dark:bg-lilac/8' : 'bg-powder/15 dark:bg-powder/8'} animate-float-slow`} style={{ animationDelay: '4s' }} />
       </div>
 
-      <div className="max-w-sm w-full text-center relative z-10">
+      <div className="max-w-sm w-full text-center relative z-10 py-8">
         <div className={`w-16 h-16 ${isLongBreak ? 'bg-forest-50' : 'bg-powder-50'} rounded-2xl flex items-center justify-center mx-auto mb-6 animate-bounce-in`}>
           <Leaf className={`w-8 h-8 ${isLongBreak ? 'text-forest' : 'text-powder-600'} animate-wobble`} />
         </div>
@@ -80,16 +101,44 @@ export default function BreakAlert() {
           {isLongBreak && <Badge variant="forest">Long</Badge>}
         </div>
 
-        {/* Suggested activity card */}
+        {/* Top recommended activity */}
         {activity && (
-          <div className="animate-slide-up mb-6" style={{ animationDelay: '400ms' }}>
+          <div className="animate-slide-up mb-4" style={{ animationDelay: '400ms' }}>
             <SuggestedActivityCard
               activity={activity}
               onStart={() => startBreak(activity)}
-              onChange={() => setShowPicker(true)}
             />
           </div>
         )}
+
+        {/* Other curated picks (1 per remaining category) */}
+        {otherPicks.length > 0 && (
+          <div className="animate-slide-up mb-4" style={{ animationDelay: '460ms' }}>
+            <p className="text-[10px] font-semibold text-lilac uppercase tracking-wider mb-2 text-left">
+              Or try
+            </p>
+            <div className="space-y-1.5">
+              {otherPicks.map((a) => (
+                <MiniActivityCard
+                  key={a.id}
+                  activity={a}
+                  onSelect={() => startBreak(a)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Browse all activities button */}
+        <div className="animate-slide-up mb-4" style={{ animationDelay: '520ms' }}>
+          <button
+            onClick={() => setShowPicker(true)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-lilac-600 hover:text-jet hover:bg-white/60 dark:hover:bg-jet-800/60 transition-all duration-200 group"
+          >
+            Browse all activities
+            <ChevronRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+          </button>
+        </div>
 
         <div className="space-y-3">
           {/* If no activity loaded yet, show a plain start button */}
@@ -101,13 +150,13 @@ export default function BreakAlert() {
             </div>
           )}
 
-          <div className="animate-slide-up" style={{ animationDelay: '480ms' }}>
+          <div className="animate-slide-up" style={{ animationDelay: '560ms' }}>
             <Button variant="outline" fullWidth onClick={() => startBreak()}>
               Just relax
             </Button>
           </div>
 
-          <div className="animate-slide-up" style={{ animationDelay: '560ms' }}>
+          <div className="animate-slide-up" style={{ animationDelay: '620ms' }}>
             <Button variant="outline" fullWidth onClick={() => extendWork(5)}>
               +5 min work
             </Button>
@@ -129,11 +178,9 @@ export default function BreakAlert() {
 function SuggestedActivityCard({
   activity,
   onStart,
-  onChange,
 }: {
   activity: BreakActivity;
   onStart: () => void;
-  onChange: () => void;
 }) {
   const Icon = getActivityIcon(activity.icon_name);
   const mins = Math.ceil(activity.duration_seconds / 60);
@@ -143,15 +190,8 @@ function SuggestedActivityCard({
     <Card padding="md" hoverable onClick={onStart} className="cursor-pointer">
       <div className="flex items-center justify-between mb-3">
         <p className="text-[10px] font-semibold text-lilac uppercase tracking-wider">
-          Suggested Activity
+          Recommended for you
         </p>
-        <button
-          onClick={(e) => { e.stopPropagation(); onChange(); }}
-          className="p-1.5 rounded-lg hover:bg-powder-50 dark:hover:bg-jet-700 transition-colors"
-          title="Change activity"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-lilac-500" />
-        </button>
       </div>
       <div className="flex items-center gap-3">
         <div className={`w-10 h-10 rounded-xl ${styles.bg} flex items-center justify-center shrink-0`}>
@@ -167,7 +207,40 @@ function SuggestedActivityCard({
             </span>
           </div>
         </div>
+        <ChevronRight className="w-4 h-4 text-lilac-400 shrink-0" />
       </div>
     </Card>
+  );
+}
+
+function MiniActivityCard({
+  activity,
+  onSelect,
+}: {
+  activity: BreakActivity;
+  onSelect: () => void;
+}) {
+  const Icon = getActivityIcon(activity.icon_name);
+  const styles = getCategoryStyles(activity.category);
+  const mins = Math.ceil(activity.duration_seconds / 60);
+
+  return (
+    <button
+      onClick={onSelect}
+      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/70 dark:bg-jet-800/70 border border-powder-200/50 dark:border-jet-700/50 hover:bg-white dark:hover:bg-jet-800 transition-all duration-200 group text-left"
+    >
+      <div className={`w-8 h-8 rounded-lg ${styles.bg} flex items-center justify-center shrink-0`}>
+        <Icon className={`w-4 h-4 ${styles.text}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-jet truncate">{activity.title}</p>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className={`text-[10px] font-medium ${styles.text}`}>{getCategoryLabel(activity.category)}</span>
+          <span className="text-lilac-300">&middot;</span>
+          <span className="text-[10px] text-lilac-500">{mins}m</span>
+        </div>
+      </div>
+      <ChevronRight className="w-3.5 h-3.5 text-lilac-400 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" />
+    </button>
   );
 }
